@@ -4,6 +4,7 @@ import { Activity } from '../models/Activity.js';
 import mongoose from 'mongoose';
 import { findBoardForMember } from '../utils/boardAccess.js';
 import { Sprint } from '../models/Sprint.js';
+import { TaskKeyCounter } from '../models/TaskKeyCounter.js';
 
 export const createTask = async (req, res) => {
   try {
@@ -99,30 +100,55 @@ export const createTask = async (req, res) => {
       taskDoc.user = uId;
     }
 
-    // Task.key is unique across the collection, so choose an unused key globally.
+    const counterId = 'global-task-key';
+    const existingKeys = await Task.distinct('key', { key: /^KAN-\d+$/ });
+    const highestTaskNumber = existingKeys.reduce((max, key) => {
+      const match = /^KAN-(\d+)$/.exec(key);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+
+    try {
+      await TaskKeyCounter.updateOne(
+        { _id: counterId },
+        { $max: { sequence: highestTaskNumber } },
+        { upsert: true }
+      );
+    } catch (error) {
+      const isCounterInitializationRace = error.code === 11000
+        && (error.keyPattern?._id || error.keyValue?._id);
+      if (!isCounterInitializationRace) throw error;
+      await TaskKeyCounter.updateOne(
+        { _id: counterId },
+        { $max: { sequence: highestTaskNumber } }
+      );
+    }
+
     const getNextTaskKey = async () => {
-      const existingKeys = await Task.distinct('key', { key: /^KAN-\d+$/ });
-      const nextNumber = existingKeys.reduce((max, key) => {
-        const match = /^KAN-(\d+)$/.exec(key);
-        return match ? Math.max(max, Number(match[1])) : max;
-      }, 0) + 1;
-      return `KAN-${nextNumber}`;
+      const updatedCounter = await TaskKeyCounter.findOneAndUpdate(
+        { _id: counterId },
+        { $inc: { sequence: 1 } },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+      return `KAN-${updatedCounter.sequence}`;
     };
 
-    // Retry if another request claims the same key after the lookup.
+    // The atomic counter prevents concurrent requests from selecting the same key.
     let newTask;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
       taskDoc.key = await getNextTaskKey();
       try {
         newTask = await Task.create(taskDoc);
         break;
       } catch (error) {
         const isKeyCollision = error.code === 11000
-          && (error.keyPattern?.key || error.keyValue?.key);
-        if (!isKeyCollision || attempt === 4) {
+          && (error.keyPattern?.key || error.keyValue?.key === taskDoc.key);
+        if (!isKeyCollision || attempt === 19) {
           throw error;
         }
       }
+    }
+    if (!newTask) {
+      throw new Error('Could not allocate a unique task key after multiple attempts.');
     }
     const taskKey = newTask.key;
 
