@@ -1,15 +1,15 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://127.0.0.1:5000/api', // localhost এর জায়গায় 127.0.0.1 ব্যবহার করা সবচেয়ে নিরাপদ
+  baseURL: import.meta.env.VITE_API_URL || 'https://kanban-backend-kgfk.onrender.com/api',
 });
 
-API.interceptors.request.use((config) => {
+API.interceptors.request.use((req) => {
   const token = localStorage.getItem('token');
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+    req.headers.Authorization = `Bearer ${token}`;
   }
-  return config;
+  return req;
 });
 
 export default API;
