@@ -155,7 +155,7 @@ export const addMemberByEmail = async (req, res) => {
       });
 
     res.json({
-      message: `Invitation created for ${targetEmail}. They must open the link and accept it before joining. Email delivery is being attempted; share the link if the email does not arrive.`,
+      message: `Invitation created successfully for ${targetEmail}. Share the invitation link below; they must accept it before joining the board.`,
       inviteLink,
       emailSent: null,
       pendingInvite: {

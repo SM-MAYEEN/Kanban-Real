@@ -77,7 +77,6 @@ const translations = {
     confirmRemoveMember: "Remove this person from the team?",
     confirmCancelInvite: "Cancel this invitation?",
     noPendingInvites: "No pending invitations.",
-    processing: "Processing...",
     errorText: "Error",
   },
   bn: {
@@ -140,7 +139,6 @@ const translations = {
     confirmRemoveMember: "এই সদস্যকে টিম থেকে সরাবেন?",
     confirmCancelInvite: "এই আমন্ত্রণটি বাতিল করবেন?",
     noPendingInvites: "কোনো অপেক্ষমাণ আমন্ত্রণ নেই।",
-    processing: "প্রক্রিয়াকরণ হচ্ছে...",
     errorText: "সমস্যা হয়েছে",
   }
 };
@@ -372,7 +370,7 @@ export default function BoardView() {
     try {
       const res = await API.post(`/boards/${boardId}/members`, { email: inviteEmail.trim() });
       setInviteFeedback({
-        type: res.data.emailSent === false || res.data.emailSent === null ? 'warning' : 'success',
+        type: 'success',
         message: res.data.message,
       });
       if (res.data.inviteLink) setGeneratedInviteLink(res.data.inviteLink);
@@ -468,13 +466,13 @@ export default function BoardView() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#07090e] text-amber-400 font-semibold text-sm animate-pulse">
-        {t.syncing}
-      </div>
-    );
-  }
+  // if (loading) {
+  //   return (
+  //     <div className="flex h-screen items-center justify-center bg-[#07090e] text-amber-400 font-semibold text-sm animate-pulse">
+  //       {t.syncing}
+  //     </div>
+  //   );
+  // }
 
   if (!board) {
     return (
@@ -1040,7 +1038,7 @@ export default function BoardView() {
                   disabled={inviteLoading}
                   className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold text-xs"
                 >
-                  {inviteLoading ? t.processing : t.sendInvite}
+                  {t.sendInvite}
                 </button>
               </div>
             </form>
