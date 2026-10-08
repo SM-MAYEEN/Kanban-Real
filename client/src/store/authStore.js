@@ -71,6 +71,14 @@ export const useAuthStore = create((set) => ({
       return false;
     }
   },
+  forgotPassword: async (email, newPassword) => {
+  try {
+    const res = await API.post('/auth/forgot-password', { email, newPassword });
+    return { success: true, message: res.data.message };
+  } catch (err) {
+    return { success: false, message: err.response?.data?.message || err.message };
+  }
+},
 
   updateProfileData: async (profilePayload) => {
     set({ loading: true, error: null });
