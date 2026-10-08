@@ -64,3 +64,45 @@ export const sendInviteEmail = async ({ toEmail, boardTitle, inviteLink, inviter
   console.log('✅ Email sent successfully! Message ID:', info.messageId);
   return info;
 };
+
+export const sendPasswordResetEmail = async ({ toEmail, resetLink }) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Email service is not configured');
+  }
+  if (!process.env.CLIENT_URL) {
+    throw new Error('CLIENT_URL is not configured');
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER.trim(),
+      pass: process.env.EMAIL_PASS.trim(),
+    },
+  });
+
+  const info = await transporter.sendMail({
+    from: `"KanbanFlow Team" <${process.env.EMAIL_USER.trim()}>`,
+    to: toEmail,
+    subject: 'Reset your KanbanFlow password',
+    text: `Use this link to reset your password. It expires in 1 hour: ${resetLink}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: auto; padding: 32px; color: #e2e8f0; background: #07090e; border-radius: 16px;">
+        <h2 style="color: #fbbf24;">Reset your password</h2>
+        <p>We received a request to reset your KanbanFlow password. This link expires in 1 hour.</p>
+        <p><a href="${resetLink}" style="display: inline-block; padding: 12px 20px; color: #090d16; background: #fbbf24; border-radius: 8px; text-decoration: none; font-weight: bold;">Reset password</a></p>
+        <p>If you did not request this, you can ignore this email.</p>
+      </div>
+    `,
+  });
+
+  const recipientAccepted = info.accepted.some(
+    (recipient) => String(recipient).toLowerCase() === toEmail.trim().toLowerCase(),
+  );
+  if (!recipientAccepted) {
+    throw new Error('Email provider did not accept the password reset recipient');
+  }
+
+  console.log('Password reset email sent. Message ID:', info.messageId);
+  return info;
+};

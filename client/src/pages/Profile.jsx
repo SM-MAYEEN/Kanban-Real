@@ -6,10 +6,11 @@ import { useLangStore } from '../store/langStore';
 import { getSocket } from '../socket/socketClient';
 
 export default function Profile() {
-  const { user, updateProfileData, loading, logout } = useAuthStore();
+  const { user, updateProfileData, logout } = useAuthStore();
   const { language } = useLangStore();
   const navigate = useNavigate();
 
+  // Profile Form States
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -20,6 +21,14 @@ export default function Profile() {
     avatar: '',
   });
 
+  // Password Change States
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [passStatus, setPassStatus] = useState({ success: '', error: '' });
+  const [isChangingPass, setIsChangingPass] = useState(false);
+
+  // Teammates, Trash & UI States
   const [teammates, setTeammates] = useState([]);
   const [onlineUserIds, setOnlineUserIds] = useState([]);
   const [archivedBoards, setArchivedBoards] = useState([]);
@@ -100,7 +109,7 @@ export default function Profile() {
     try {
       const success = await updateProfileData(formData);
       if (success) {
-        setSuccessMsg(language === 'bn' ? 'প্রোফাইল সফলভাবে আপডেট হয়েছে!' : 'Profile updated successfully!');
+        setSuccessMsg(language === 'bn' ? 'প্রোফাইল সফলভাবে আপডেট হয়েছে!' : 'Profile updated successfully!');
         useAuthStore.getState().fetchCurrentUser();
         setTimeout(() => setSuccessMsg(''), 4000);
       }
@@ -108,6 +117,27 @@ export default function Profile() {
       console.error(err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPassStatus({ success: '', error: '' });
+    setIsChangingPass(true);
+
+    try {
+      const res = await API.put('/auth/change-password', { currentPassword, newPassword });
+      setPassStatus({ success: res.data.message || 'পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে!', error: '' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setTimeout(() => setPassStatus({ success: '', error: '' }), 4000);
+    } catch (err) {
+      setPassStatus({
+        error: err.response?.data?.message || (language === 'bn' ? 'পরিবর্তন করা সম্ভব হয়নি' : 'Failed to update password'),
+        success: '',
+      });
+    } finally {
+      setIsChangingPass(false);
     }
   };
 
@@ -121,6 +151,7 @@ export default function Profile() {
   };
 
   const handlePermanentDelete = async (boardId) => {
+    if (!window.confirm(language === 'bn' ? 'ওয়ার্কস্পেসটি চিরতরে মুছে ফেলতে চান?' : 'Permanently delete this workspace?')) return;
     try {
       const res = await API.delete(`/boards/${boardId}/permanent`);
       alert(res.data.message);
@@ -135,7 +166,7 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
       {/* Top Navbar */}
-      <nav className="h-16 px-8 border-b border-white/[0.08] bg-[#0c0f17] flex items-center justify-between">
+      <nav className="h-16 px-4 sm:px-8 border-b border-white/[0.08] bg-[#0c0f17] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
             to="/dashboard"
@@ -143,7 +174,7 @@ export default function Profile() {
           >
             {isBn ? '← ড্যাশবোর্ডে ফিরুন' : '← Back to Dashboard'}
           </Link>
-          <span className="text-sm font-bold text-white">
+          <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[200px] sm:max-w-none">
             {isBn ? 'প্রোফাইল সেটিংস ও আইডি ম্যানেজমেন্ট' : 'Profile Settings & ID Management'}
           </span>
         </div>
@@ -157,124 +188,185 @@ export default function Profile() {
       </nav>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-8 space-y-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-8 space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Profile Form (8 Col) */}
-          <div className="lg:col-span-8 bg-white/[0.03] rounded-2xl p-8 border border-white/10 shadow-xl">
-            <div className="flex items-center gap-6 pb-6 mb-6 border-b border-white/10">
-              <div className="relative group">
-                <div className="w-20 h-20 rounded-2xl bg-slate-900 border-2 border-amber-500/40 overflow-hidden flex items-center justify-center text-2xl font-bold text-amber-300 shadow">
-                  {formData.avatar ? (
-                    <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    formData.name?.charAt(0)?.toUpperCase() || 'U'
-                  )}
+          {/* Profile Form & Password Section (8 Col) */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Profile Info Form */}
+            <div className="bg-white/[0.03] rounded-2xl p-6 sm:p-8 border border-white/10 shadow-xl">
+              <div className="flex items-center gap-6 pb-6 mb-6 border-b border-white/10">
+                <div className="relative group shrink-0">
+                  <div className="w-20 h-20 rounded-2xl bg-slate-900 border-2 border-amber-500/40 overflow-hidden flex items-center justify-center text-2xl font-bold text-amber-300 shadow">
+                    {formData.avatar ? (
+                      <img src={formData.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      formData.name?.charAt(0)?.toUpperCase() || 'U'
+                    )}
+                  </div>
+                  <label className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center text-[10px] text-white opacity-0 group-hover:opacity-100 transition cursor-pointer">
+                    {isBn ? 'ছবি বদলান' : 'Change'}
+                    <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                  </label>
                 </div>
-                <label className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center text-[10px] text-white opacity-0 group-hover:opacity-100 transition cursor-pointer">
-                  {isBn ? 'ছবি বদলান' : 'Change'}
-                  <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                </label>
+
+                <div className="overflow-hidden">
+                  <h2 className="text-xl font-bold text-white truncate">{formData.name || 'Member Profile'}</h2>
+                  <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+                  <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    {formData.designation || 'Engineer'} • {formData.organization || 'Workspace'}
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <h2 className="text-xl font-bold text-white">{formData.name || 'Member Profile'}</h2>
-                <p className="text-xs text-slate-400">{user?.email}</p>
-                <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                  {formData.designation || 'Engineer'} • {formData.organization || 'Workspace'}
-                </span>
-              </div>
+              {successMsg && (
+                <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
+                  {successMsg}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-slate-400 mb-1">{isBn ? 'পূর্ণ নাম' : 'Full Name'}</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">{isBn ? 'ফোন নম্বর' : 'Phone'}</label>
+                    <input
+                      type="text"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">{isBn ? 'কোম্পানি / বিশ্ববিদ্যালয়' : 'Organization / University'}</label>
+                    <input
+                      type="text"
+                      value={formData.organization}
+                      onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">{isBn ? 'পদবি / রোল' : 'Designation / Role'}</label>
+                    <input
+                      type="text"
+                      value={formData.designation}
+                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">{isBn ? 'স্টুডেন্ট বা এমপ্লয়ী আইডি' : 'Student / Employee ID'}</label>
+                    <input
+                      type="text"
+                      value={formData.identificationId}
+                      onChange={(e) => setFormData({ ...formData, identificationId: e.target.value })}
+                      className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                      placeholder="e.g. C2010XX / EMP-409"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 mb-1">{isBn ? 'রেজিস্টার্ড ইমেইল (পরিবর্তনযোগ্য নয়)' : 'Registered Email'}</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={user?.email || ''}
+                      className="w-full bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-slate-500 cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 mb-1">{isBn ? 'বায়ো / বিবরণ' : 'Bio'}</label>
+                  <textarea
+                    rows={2}
+                    value={formData.bio}
+                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold rounded-xl shadow-md transition"
+                  >
+                    {isSaving ? (isBn ? 'সেভ হচ্ছে...' : 'Saving...') : (isBn ? 'প্রোফাইল সেভ করুন' : 'Save Profile Changes')}
+                  </button>
+                </div>
+              </form>
             </div>
 
-            {successMsg && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs">
-                {successMsg}
-              </div>
-            )}
+            {/* Change Password Card */}
+            <div className="luxury-glass-card p-6 sm:p-8 rounded-2xl border border-amber-500/30">
+              <h3 className="text-sm font-bold text-white mb-2">{isBn ? 'পাসওয়ার্ড পরিবর্তন করুন' : 'Change Password'}</h3>
+              <p className="text-[11px] text-slate-400 mb-4">{isBn ? 'নিরাপত্তার জন্য অ্যাকাউন্টের পাসওয়ার্ড নিয়মিত পরিবর্তন করুন' : 'Update your password regularly for better security'}</p>
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
+              {passStatus.success && (
+                <div className="p-3 mb-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs rounded-xl">
+                  {passStatus.success}
+                </div>
+              )}
+              {passStatus.error && (
+                <div className="p-3 mb-4 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl">
+                  {passStatus.error}
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
                 <div>
-                  <label className="block text-slate-400 mb-1">{isBn ? 'পূর্ণ নাম' : 'Full Name'}</label>
+                  <label className="text-[11px] text-slate-400 block mb-1">{isBn ? 'বর্তমান পাসওয়ার্ড' : 'Current Password'}</label>
                   <input
-                    type="text"
+                    type="password"
                     required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full bg-[#0c1322] border border-amber-500/25 px-3 py-2 rounded-xl text-xs text-white outline-none focus:border-amber-400"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">{isBn ? 'ফোন নম্বর' : 'Phone'}</label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">{isBn ? 'কোম্পানি / বিশ্ববিদ্যালয়' : 'Organization / University'}</label>
-                  <input
-                    type="text"
-                    value={formData.organization}
-                    onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">{isBn ? 'পদবি / রোল' : 'Designation / Role'}</label>
-                  <input
-                    type="text"
-                    value={formData.designation}
-                    onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">{isBn ? 'স্টুডেন্ট বা এমপ্লয়ী আইডি' : 'Student / Employee ID'}</label>
-                  <input
-                    type="text"
-                    value={formData.identificationId}
-                    onChange={(e) => setFormData({ ...formData, identificationId: e.target.value })}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
-                    placeholder="e.g. C2010XX / EMP-409"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">{isBn ? 'রেজিস্টার্ড ইমেইল (পরিবর্তনযোগ্য নয়)' : 'Registered Email'}</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={user?.email || ''}
-                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-3 py-2 text-slate-500 cursor-not-allowed"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-slate-400 mb-1">{isBn ? 'বায়ো / বিবরণ' : 'Bio'}</label>
-                <textarea
-                  rows={2}
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
-                />
-              </div>
+                <div>
+                  <label className="text-[11px] text-slate-400 block mb-1">{isBn ? 'নতুন পাসওয়ার্ড' : 'New Password'}</label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-[#0c1322] border border-amber-500/25 px-3 py-2 pr-10 rounded-xl text-xs text-white outline-none focus:border-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"
+                    >
+                      {showPass ? '👁️' : '🙈'}
+                    </button>
+                  </div>
+                </div>
 
-              <div className="flex justify-end pt-2">
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold rounded-xl shadow-md"
+                  disabled={isChangingPass}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-md transition"
                 >
-                  {isSaving ? (isBn ? 'সেভ হচ্ছে...' : 'Saving...') : (isBn ? 'প্রোফাইল সেভ করুন' : 'Save Profile Changes')}
+                  {isChangingPass ? (isBn ? 'আপডেট হচ্ছে...' : 'Updating...') : (isBn ? 'পাসওয়ার্ড সেভ করুন' : 'Update Password')}
                 </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
 
           {/* Teammates Live Presence (4 Col) */}
-          <div className="lg:col-span-4 bg-white/[0.03] rounded-2xl p-6 border border-white/10 flex flex-col justify-between shadow-xl">
+          <div className="lg:col-span-4 bg-white/[0.03] rounded-2xl p-6 border border-white/10 flex flex-col justify-between shadow-xl h-fit">
             <div>
               <div className="flex justify-between items-center pb-3 border-b border-white/10 mb-4">
                 <h3 className="font-bold text-white text-xs flex items-center gap-2">
@@ -287,7 +379,7 @@ export default function Profile() {
 
               <div className="space-y-3">
                 {teammates.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">{isBn ? 'এখনো কোনো মেম্বার যুক্ত হয়নি।' : 'No teammates connected yet.'}</p>
+                  <p className="text-xs text-slate-500 italic">{isBn ? 'এখনো কোনো মেম্বার যুক্ত হয়নি।' : 'No teammates connected yet.'}</p>
                 ) : (
                   teammates.map((m) => {
                     const isOnline = onlineUserIds.includes(m._id);
@@ -344,7 +436,7 @@ export default function Profile() {
               <p className="text-xs text-slate-500 italic">{isBn ? 'ট্র্যাশে কোনো ডিলিট করা বোর্ড নেই।' : 'No deleted workspaces in trash.'}</p>
             ) : (
               archivedBoards.map((ab) => (
-                <div key={ab._id} className="p-3 bg-slate-950 rounded-xl border border-white/5 flex justify-between items-center">
+                <div key={ab._id} className="p-3 bg-slate-950 rounded-xl border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h4 className="font-bold text-xs text-white">{ab.title}</h4>
                     <span className="text-[10px] text-slate-400">Deleted: {new Date(ab.deletedAt).toLocaleDateString()}</span>
@@ -352,13 +444,13 @@ export default function Profile() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleRestore(ab._id)}
-                      className="px-3 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded-lg font-bold"
+                      className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs rounded-lg font-bold transition"
                     >
                       {isBn ? 'রিস্টোর' : 'Restore'}
                     </button>
                     <button
                       onClick={() => handlePermanentDelete(ab._id)}
-                      className="px-3 py-1 bg-rose-500/20 text-rose-300 text-xs rounded-lg font-bold"
+                      className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs rounded-lg font-bold transition"
                     >
                       {isBn ? 'মুছে ফেলুন' : 'Wipe Forever'}
                     </button>
@@ -386,7 +478,7 @@ export default function Profile() {
             <div className="flex gap-2.5 justify-center pt-2">
               <button
                 onClick={() => setShowLogoutConfirm(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-white/5 hover:bg-white/10"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-white/5 hover:bg-white/10 transition"
               >
                 {isBn ? 'বাতিল' : 'Cancel'}
               </button>
@@ -395,7 +487,7 @@ export default function Profile() {
                   logout();
                   navigate('/login');
                 }}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500"
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition"
               >
                 {isBn ? 'হ্যাঁ, লগআউট' : 'Yes, Sign Out'}
               </button>

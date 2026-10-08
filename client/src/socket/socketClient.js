@@ -1,11 +1,11 @@
 import { io } from 'socket.io-client';
+import { SOCKET_BASE_URL } from '../api/axiosInstance';
 
 let socket = null;
 
 export const initSocket = (token) => {
   if (!socket) {
-    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://kanban-backend-kgfk.onrender.com';
-    socket = io(SOCKET_URL, {
+    socket = io(SOCKET_BASE_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,

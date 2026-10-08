@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import API from '../api/axiosInstance';
 import { getSocket } from '../socket/socketClient';
 import { useAuthStore } from '../store/authStore';
+import MessageReactions from './MessageReactions';
 
 export default function ChannelChat({ channel, boardId, boardOwnerId }) {
   const [messages, setMessages] = useState([]);
@@ -38,16 +39,23 @@ export default function ChannelChat({ channel, boardId, boardOwnerId }) {
     const handleDeleteMsg = ({ messageId }) => {
       setMessages((prev) => prev.filter((m) => m._id !== messageId));
     };
+    const handleReactionUpdate = ({ messageId, reactions }) => {
+      setMessages((prev) => prev.map((message) => (
+        message._id === messageId ? { ...message, reactions } : message
+      )));
+    };
 
     if (socket) {
       socket.on('channel:message', handleNewMsg);
       socket.on('channel:message:deleted', handleDeleteMsg);
+      socket.on('message_reaction_updated', handleReactionUpdate);
     }
 
     return () => {
       if (socket) {
         socket.off('channel:message', handleNewMsg);
         socket.off('channel:message:deleted', handleDeleteMsg);
+        socket.off('message_reaction_updated', handleReactionUpdate);
       }
     };
   }, [channel]);
@@ -145,6 +153,7 @@ export default function ChannelChat({ channel, boardId, boardOwnerId }) {
                       </span>
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">{m.text}</p>
+                    <MessageReactions message={m} />
                   </div>
                 </div>
 

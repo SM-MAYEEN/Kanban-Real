@@ -20,6 +20,20 @@ const channelMessageSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    reactions: [
+      {
+        emoji: {
+          type: String,
+          required: true,
+        },
+        users: [
+          {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+          },
+        ],
+      },
+    ],
   },
   { timestamps: true }
 );

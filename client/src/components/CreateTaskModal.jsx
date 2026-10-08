@@ -1,239 +1,202 @@
 import { useState } from 'react';
+import AiSubtaskGenerator from './AiSubtaskGenerator';
+import { useLangStore } from '../store/langStore';
+import { translations } from '../utils/translations';
 
-export default function CreateTaskModal({ isOpen, onClose, columnId, boardId, onAdd }) {
+export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initialColumn = 'todo' }) {
+  const { language } = useLangStore();
+  const t = translations[language] || translations.en;
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState('Medium');
-  const [issueType, setIssueType] = useState('Task');
-  const [storyPoints, setStoryPoints] = useState(3);
-  const [estimatedHours, setEstimatedHours] = useState(8);
-  const [tagsInput, setTagsInput] = useState('');
+  const [storyPoints, setStoryPoints] = useState(1);
   const [subtasks, setSubtasks] = useState([]);
-  const [newSubtask, setNewSubtask] = useState('');
+  const [newSubtaskInput, setNewSubtaskInput] = useState('');
 
   if (!isOpen) return null;
 
-  const handleAddSubtask = () => {
-    if (!newSubtask.trim()) return;
-    setSubtasks([...subtasks, { title: newSubtask.trim(), isCompleted: false }]);
-    setNewSubtask('');
+  const handleAddAiSubtasks = (aiGeneratedList) => {
+    const formatted = aiGeneratedList.map((item) => ({
+      id: Date.now() + Math.random(),
+      title: item,
+      completed: false,
+    }));
+    setSubtasks((prev) => [...prev, ...formatted]);
   };
 
-  const handleRemoveSubtask = (idx) => {
-    setSubtasks(subtasks.filter((_, i) => i !== idx));
+  const handleAddManualSubtask = (e) => {
+    e.preventDefault();
+    if (!newSubtaskInput.trim()) return;
+    setSubtasks((prev) => [
+      ...prev,
+      { id: Date.now(), title: newSubtaskInput.trim(), completed: false },
+    ]);
+    setNewSubtaskInput('');
+  };
+
+  const handleRemoveSubtask = (id) => {
+    setSubtasks((prev) => prev.filter((st) => st.id !== id));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    const parsedTags = tagsInput
-      .split(',')
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
-
-    onAdd({
+    onCreateTask({
       title: title.trim(),
       description: description.trim(),
-      issueType,
-      storyPoints: Number(storyPoints),
-      estimatedHours: Number(estimatedHours) || 0,
-      dueDate: dueDate || null,
       priority,
-      tags: parsedTags,
+      storyPoints: Number(storyPoints) || 1,
+      status: initialColumn,
       subtasks,
-      columnId,
-      boardId,
     });
 
     setTitle('');
     setDescription('');
-    setDueDate('');
     setPriority('Medium');
-    setIssueType('Task');
-    setStoryPoints(3);
-    setEstimatedHours(8);
-    setTagsInput('');
+    setStoryPoints(1);
     setSubtasks([]);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl p-6 text-slate-100 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-5 pb-3 border-b border-white/[0.08]">
-          <div>
-            <h3 className="font-bold text-base text-white">Create Jira-Style Issue</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Specify category, complexity & estimated duration</p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+      <div className="luxury-glass-card rounded-2xl w-full max-w-lg p-6 border border-amber-500/40 shadow-2xl relative my-8">
+        <div className="flex justify-between items-center pb-3 border-b border-amber-500/20 mb-4">
+          <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+            <span className="text-amber-400">✨</span> {t.modalTitle}
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-lg p-1">
+            ✕
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          {/* Issue Type & Story Point Selection */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Issue Type
-              </label>
-              <select
-                value={issueType}
-                onChange={(e) => setIssueType(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
-              >
-                <option value="Task">☑️ Task</option>
-                <option value="Story">📗 Story</option>
-                <option value="Bug">🐞 Bug</option>
-                <option value="Epic">⚡ Epic</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Story Points
-              </label>
-              <select
-                value={storyPoints}
-                onChange={(e) => setStoryPoints(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
-              >
-                <option value="1">1 pt</option>
-                <option value="2">2 pts</option>
-                <option value="3">3 pts</option>
-                <option value="5">5 pts</option>
-                <option value="8">8 pts</option>
-                <option value="13">13 pts</option>
-              </select>
-            </div>
-
-            {/* Estimated Hours Input */}
-            <div>
-              <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Estimated (Hours)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                placeholder="e.g. 8"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
-              />
-            </div>
-          </div>
-
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Summary / Title *</label>
+            <label className="text-xs font-bold text-slate-300 block mb-1">
+              {t.taskNameLabel}
+            </label>
             <input
               type="text"
               required
-              placeholder="e.g. Implement WebSocket reconnection retry"
+              placeholder={t.taskNamePlaceholder}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#0c1322] border border-amber-500/30 text-white text-xs outline-none focus:border-amber-400 placeholder:text-slate-500"
             />
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Description</label>
+            <label className="text-xs font-bold text-slate-300 block mb-1">
+              {t.descLabel}
+            </label>
             <textarea
               rows={2}
-              placeholder="Technical acceptance criteria..."
+              placeholder={t.descPlaceholder}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
+              className="w-full px-3.5 py-2 rounded-xl bg-[#0c1322] border border-amber-500/30 text-white text-xs outline-none focus:border-amber-400 placeholder:text-slate-500 resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Priority</label>
+              <label className="text-xs font-bold text-slate-300 block mb-1">
+                {t.priority}
+              </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
+                className="w-full px-3 py-2 rounded-xl bg-[#0c1322] border border-amber-500/30 text-white text-xs outline-none focus:border-amber-400"
               >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
+                <option value="Low">{t.low}</option>
+                <option value="Medium">{t.medium}</option>
+                <option value="High">{t.high}</option>
               </select>
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Due Date</label>
+              <label className="text-xs font-bold text-slate-300 block mb-1">
+                {t.totalStoryPoints}
+              </label>
               <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
+                type="number"
+                min="1"
+                max="21"
+                value={storyPoints}
+                onChange={(e) => setStoryPoints(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-[#0c1322] border border-amber-500/30 text-white text-xs outline-none focus:border-amber-400"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Tags (Comma-separated)
-            </label>
-            <input
-              type="text"
-              placeholder="frontend, auth, api"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
-            />
-          </div>
+          <div className="pt-2 border-t border-amber-500/20">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <span>📋</span> {t.subtasksTitle} ({subtasks.length})
+              </label>
+              <AiSubtaskGenerator taskTitle={title} onAddSubtasks={handleAddAiSubtasks} />
+            </div>
 
-          {/* Subtasks */}
-          <div>
-            <label className="block font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Acceptance Checklist</label>
-            <div className="flex gap-2 mb-2">
+            <div className="flex gap-2 mb-2.5">
               <input
                 type="text"
-                placeholder="Add sub-task..."
-                value={newSubtask}
-                onChange={(e) => setNewSubtask(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSubtask();
-                  }
-                }}
-                className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white outline-none focus:border-amber-400"
+                placeholder={t.manualSubtaskPlaceholder}
+                value={newSubtaskInput}
+                onChange={(e) => setNewSubtaskInput(e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded-xl bg-[#0c1322] border border-amber-500/20 text-white text-xs outline-none focus:border-amber-400 placeholder:text-slate-500"
               />
               <button
                 type="button"
-                onClick={handleAddSubtask}
-                className="px-3 py-2 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl font-bold hover:bg-amber-500/30"
+                onClick={handleAddManualSubtask}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold"
               >
-                + Add
+                {t.add}
               </button>
             </div>
 
-            <div className="space-y-1.5 max-h-24 overflow-y-auto">
-              {subtasks.map((st, i) => (
-                <div key={i} className="flex justify-between items-center bg-slate-950/70 p-2 rounded-lg border border-white/5">
-                  <span className="text-slate-300 truncate">{st.title}</span>
-                  <button type="button" onClick={() => handleRemoveSubtask(i)} className="text-slate-500 hover:text-rose-400">✕</button>
-                </div>
-              ))}
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              {subtasks.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic py-1">
+                  {t.noSubtasks}
+                </p>
+              ) : (
+                subtasks.map((st) => (
+                  <div
+                    key={st.id}
+                    className="flex items-center justify-between bg-slate-900/80 border border-amber-500/20 px-2.5 py-1.5 rounded-lg text-xs"
+                  >
+                    <span className="text-slate-200 truncate flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                      {st.title}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSubtask(st.id)}
+                      className="text-slate-400 hover:text-rose-400 text-xs px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-white/[0.08]">
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-amber-500/20">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-slate-400 hover:text-white bg-white/[0.03] rounded-xl"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:bg-white/5 transition"
             >
-              Cancel
+              {t.cancel}
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 font-bold text-slate-950 hover:from-amber-300 hover:to-amber-500"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 active:scale-95"
             >
-              Create Issue
+              {t.submitTask}
             </button>
           </div>
         </form>

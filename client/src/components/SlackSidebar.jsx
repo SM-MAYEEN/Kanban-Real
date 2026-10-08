@@ -50,6 +50,8 @@ export default function SlackSidebar({
   onOpenBurndown = () => {},
   onOpenInvite = () => {},
   isBoardView = false,
+  isMobileOpen = false,
+  setIsMobileOpen = () => {},
 }) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -61,7 +63,6 @@ export default function SlackSidebar({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
-  // সবসময় স্থায়ীভাবে HTML-এ 'dark' ক্লাস লক করে রাখা
   useEffect(() => {
     document.documentElement.classList.add('dark');
     localStorage.setItem('theme', 'dark');
@@ -74,28 +75,41 @@ export default function SlackSidebar({
 
   return (
     <>
-      <aside className="h-screen shrink-0 flex z-30 select-none">
-        {/* ১. বামপাশের সরু মিনি-রেল (Deep Luxury Navy & Gold) */}
-        <div className="w-16 h-full bg-[#050811] border-r border-amber-500/20 flex flex-col items-center justify-between py-4 shadow-2xl">
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          onClick={() => setIsMobileOpen(false)}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
+        />
+      )}
+
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 flex h-full select-none transition-transform duration-300 md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        {/* মিনি রেল */}
+        <div className="w-16 h-full bg-[#050811] border-r border-amber-500/20 flex flex-col items-center justify-between py-4 shadow-2xl shrink-0">
           <div className="flex flex-col items-center gap-3">
-            {/* অ্যানিমেটেড 'K' লোগো */}
             <Link
               to="/dashboard"
-              className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 flex items-center justify-center font-black text-slate-950 text-base shadow-lg shadow-amber-500/30 k-logo-animated transition cursor-pointer"
+              className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 flex items-center justify-center font-black text-slate-950 text-base shadow-lg shadow-amber-500/30 k-logo-animated transition"
               title="KanbanFlow Enterprise"
             >
               K
             </Link>
 
-            {/* কোর মেনু বাটনসমূহ: শুধুমাত্র বোর্ডের ভেতর থাকলেই শো করবে */}
             {isBoardView ? (
               <div className="flex flex-col items-center gap-2 mt-2">
                 <button
-                  onClick={() => setCurrentView('kanban')}
+                  onClick={() => {
+                    setCurrentView('kanban');
+                    setIsMobileOpen(false);
+                  }}
                   title={t.board}
                   className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition ${
                     currentView === 'kanban'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-inner font-bold'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                       : 'text-slate-400 hover:text-amber-200 hover:bg-white/5'
                   }`}
                 >
@@ -104,11 +118,14 @@ export default function SlackSidebar({
                 </button>
 
                 <button
-                  onClick={() => setCurrentView('channel')}
+                  onClick={() => {
+                    setCurrentView('channel');
+                    setIsMobileOpen(false);
+                  }}
                   title={t.dms}
                   className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition ${
                     currentView === 'channel'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-inner font-bold'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                       : 'text-slate-400 hover:text-amber-200 hover:bg-white/5'
                   }`}
                 >
@@ -117,11 +134,14 @@ export default function SlackSidebar({
                 </button>
 
                 <button
-                  onClick={() => setCurrentView('activity')}
+                  onClick={() => {
+                    setCurrentView('activity');
+                    setIsMobileOpen(false);
+                  }}
                   title={t.activity}
                   className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition ${
                     currentView === 'activity'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-inner font-bold'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                       : 'text-slate-400 hover:text-amber-200 hover:bg-white/5'
                   }`}
                 >
@@ -130,11 +150,14 @@ export default function SlackSidebar({
                 </button>
 
                 <button
-                  onClick={() => setCurrentView('files')}
+                  onClick={() => {
+                    setCurrentView('files');
+                    setIsMobileOpen(false);
+                  }}
                   title={t.files}
                   className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition ${
                     currentView === 'files'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-inner font-bold'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                       : 'text-slate-400 hover:text-amber-200 hover:bg-white/5'
                   }`}
                 >
@@ -143,7 +166,10 @@ export default function SlackSidebar({
                 </button>
 
                 <button
-                  onClick={onOpenBurndown}
+                  onClick={() => {
+                    onOpenBurndown();
+                    setIsMobileOpen(false);
+                  }}
                   title={t.tools}
                   className="w-11 h-11 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:text-amber-300 hover:bg-white/5 transition"
                 >
@@ -165,9 +191,7 @@ export default function SlackSidebar({
             )}
           </div>
 
-          {/* বটম সেকশন: শুধুমাত্র ভাষা ও প্রোফাইল (হোয়াইট মোড অপশন ডিলিট করা হয়েছে) */}
           <div className="flex flex-col items-center gap-3 relative">
-            {/* BN / EN Toggle */}
             <button
               onClick={toggleLanguage}
               title="Toggle Language"
@@ -176,7 +200,6 @@ export default function SlackSidebar({
               {language === 'en' ? 'BN' : 'EN'}
             </button>
 
-            {/* প্রোফাইল মেনু */}
             <div className="relative">
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
@@ -197,6 +220,7 @@ export default function SlackSidebar({
                   <div
                     onClick={() => {
                       setShowProfileMenu(false);
+                      setIsMobileOpen(false);
                       navigate('/profile');
                     }}
                     className="px-3.5 py-2 border-b border-white/10 mb-1 cursor-pointer hover:bg-amber-500/10 transition"
@@ -212,7 +236,10 @@ export default function SlackSidebar({
 
                   <Link
                     to="/profile"
-                    onClick={() => setShowProfileMenu(false)}
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      setIsMobileOpen(false);
+                    }}
                     className="flex items-center gap-2 px-3.5 py-2 text-slate-200 hover:bg-white/10 transition font-medium"
                   >
                     <span>⚙️</span> {t.profile}
@@ -233,9 +260,9 @@ export default function SlackSidebar({
           </div>
         </div>
 
-        {/* ২. চওড়া ওয়ার্কস্পেস প্যানেল */}
+        {/* সাইডবার প্যানেল */}
         {!collapsed && (
-          <div className="w-64 h-full bg-[#0a1120] border-r border-amber-500/20 flex flex-col justify-between py-4 px-3 text-slate-100 shadow-2xl">
+          <div className="w-64 h-full bg-[#0a1120] border-r border-amber-500/20 flex flex-col justify-between py-4 px-3 text-slate-100 shadow-2xl shrink-0">
             <div className="overflow-y-auto">
               <div className="flex items-center justify-between px-2 pb-3 border-b border-amber-500/20 mb-3">
                 <div className="overflow-hidden">
@@ -247,15 +274,13 @@ export default function SlackSidebar({
                   </span>
                 </div>
                 <button
-                  onClick={() => setCollapsed(true)}
-                  title="Hide Sidebar"
-                  className="text-xs text-amber-300/80 hover:text-amber-300 p-1 hover:bg-white/5 rounded-md"
+                  onClick={() => setIsMobileOpen(false)}
+                  className="md:hidden text-slate-400 hover:text-white p-1 text-sm"
                 >
-                  ◀
+                  ✕
                 </button>
               </div>
 
-              {/* শুধুমাত্র বোর্ডের ভেতর থাকলেই চ্যানেল অপশন দেখাবে */}
               {isBoardView && (
                 <div className="mb-5">
                   <div className="flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-amber-400/80 mb-1.5">
@@ -270,6 +295,7 @@ export default function SlackSidebar({
                         onClick={() => {
                           setSelectedChannel(channel);
                           setCurrentView('channel');
+                          setIsMobileOpen(false);
                         }}
                         className={`w-full text-left px-3 py-1.5 rounded-xl text-xs truncate flex items-center gap-2 transition ${
                           selectedChannel === channel && currentView === 'channel'
@@ -285,11 +311,10 @@ export default function SlackSidebar({
                 </div>
               )}
 
-              {/* অ্যাক্টিভ বোর্ডগুলোর লিস্ট */}
               <div>
                 <div className="flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-amber-400/80 mb-1.5">
                   <span>{t.activeBoards} ({boards.length})</span>
-                  <Link to="/dashboard" className="text-xs hover:text-amber-300">+</Link>
+                  <Link to="/dashboard" onClick={() => setIsMobileOpen(false)} className="text-xs hover:text-amber-300">+</Link>
                 </div>
 
                 <div className="space-y-1">
@@ -299,7 +324,10 @@ export default function SlackSidebar({
                     boards.map((b) => (
                       <button
                         key={b._id}
-                        onClick={() => navigate(`/board/${b._id}`)}
+                        onClick={() => {
+                          navigate(`/board/${b._id}`);
+                          setIsMobileOpen(false);
+                        }}
                         className={`w-full text-left px-3 py-2 rounded-xl text-xs truncate flex items-center gap-2 transition border ${
                           b._id === board?._id
                             ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 font-bold shadow-sm'
@@ -323,20 +351,8 @@ export default function SlackSidebar({
             </div>
           </div>
         )}
-
-        {/* কলাপ্স বোতাম */}
-        {collapsed && (
-          <button
-            onClick={() => setCollapsed(false)}
-            title="Expand Sidebar"
-            className="h-10 w-4 bg-[#0a1120] border-r border-y border-amber-500/30 rounded-r-lg my-auto text-[10px] text-amber-300 hover:text-white flex items-center justify-center"
-          >
-            ▶
-          </button>
-        )}
       </aside>
 
-      {/* কনফার্মেশন সহ লগআউট মডাল */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl space-y-4">
