@@ -29,7 +29,11 @@ export default function InviteAcceptance() {
     setLoading(true);
     setError('');
     try {
-      const response = await API.post('/boards/accept-invite', { boardId, inviteToken });
+      const response = await API.post('/boards/accept-invite', {
+        boardId,
+        inviteToken,
+        email: invitedEmail,
+      });
       if (response.data.status === 'approved') {
         navigate(`/board/${boardId}`, { replace: true });
       } else {

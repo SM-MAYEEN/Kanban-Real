@@ -170,7 +170,7 @@ export const addMemberByEmail = async (req, res) => {
 // ইনভাইট টোকেন অ্যাকসেপ্ট করে বোর্ডে যোগ হওয়া
 export const acceptInviteToken = async (req, res) => {
   try {
-    const { boardId, inviteToken } = req.body;
+    const { boardId, inviteToken, email } = req.body;
     const board = await Board.findById(boardId);
     if (!board) return res.status(404).json({ message: 'Board not found' });
 
@@ -179,7 +179,7 @@ export const acceptInviteToken = async (req, res) => {
       const alreadyMember = board.members.some(
         (memberId) => memberId.toString() === req.user._id.toString()
       );
-      if (alreadyMember) {
+      if (alreadyMember && email?.toLowerCase() === req.user.email.toLowerCase()) {
         return res.json({ message: 'Invitation already approved.', status: 'approved', boardId });
       }
       return res.status(400).json({ message: 'Invalid or expired invitation token.' });
