@@ -25,22 +25,22 @@ export const createTask = async (req, res) => {
     }
 
     if (!boardId || !columnId) {
-      return res.status(400).json({ message: 'Valid boardId and columnId are required' });
+      return res.status(400).json({ message: 'Board ID and Column ID are required' });
     }
 
-    // Mongoose ObjectId Validation (500 CastError প্রতিরোধ)
+    // ID ভ্যালিডেশন
     const validBoardId = mongoose.isValidObjectId(boardId) ? boardId : null;
     const validColumnId = mongoose.isValidObjectId(columnId) ? columnId : null;
 
     if (!validBoardId || !validColumnId) {
-      return res.status(400).json({ message: 'Invalid Board ID or Column ID format' });
+      return res.status(400).json({ message: 'Invalid Board ID or Column ID' });
     }
 
     const columnTaskCount = await Task.countDocuments({ columnId: validColumnId });
     const boardTotalTasks = await Task.countDocuments({ boardId: validBoardId });
     const taskKey = `KAN-${boardTotalTasks + 1}`;
 
-    // Subtasks ক্লিন ফরম্যাটিং
+    // Subtasks নিরাপদ ফরম্যাটিং
     const sanitizedSubtasks = Array.isArray(subtasks)
       ? subtasks
           .map((st) => {
@@ -51,12 +51,16 @@ export const createTask = async (req, res) => {
           .filter((st) => st && st.title.trim())
       : [];
 
-    // BlockedBy সেফ ফরম্যাটিং
+    // BlockedBy নিরাপদ ফরম্যাটিং
     const sanitizedBlockedBy = Array.isArray(blockedBy)
       ? blockedBy.filter((id) => mongoose.isValidObjectId(id))
       : [];
 
-    const newTask = await Task.create({
+    // বর্তমান ইউজারের নিরাপদ রেফারেন্স
+    const currentUserId = req.user ? (req.user._id || req.user.id) : null;
+
+    // টাস্ক ডাটা অবজেক্ট তৈরি
+    const taskData = {
       key: taskKey,
       title: title.trim(),
       description: description ? description.trim() : '',
@@ -73,9 +77,17 @@ export const createTask = async (req, res) => {
       tags: Array.isArray(tags) ? tags : [],
       subtasks: sanitizedSubtasks,
       order: columnTaskCount,
-    });
+    };
 
-    // Populate (সেফটি ট্রাই-ক্যাচ সহ)
+    // যদি Task স্কিমাতে creator বা user ফিল্ড থাকে
+    if (currentUserId) {
+      taskData.creator = currentUserId;
+      taskData.user = currentUserId;
+    }
+
+    const newTask = await Task.create(taskData);
+
+    // Populate করা
     let populatedTask;
     try {
       populatedTask = await Task.findById(newTask._id)
@@ -85,12 +97,12 @@ export const createTask = async (req, res) => {
       populatedTask = newTask;
     }
 
-    // অ্যাক্টিভিটি লগ (ইউজার অথেন্টিকেটেড থাকলে)
-    if (req.user && req.user._id) {
+    // অ্যাক্টিভিটি লগ (কোনো কারণে ফেইল করলেও যেন টাস্ক ক্রিয়েশন না থামে)
+    if (currentUserId) {
       try {
         await Activity.create({
           boardId: validBoardId,
-          user: req.user._id,
+          user: currentUserId,
           action: 'CREATED_TASK',
           details: `created [${taskKey}] "${newTask.title}"`,
         });
@@ -99,22 +111,21 @@ export const createTask = async (req, res) => {
       }
     }
 
-    // Socket.io ব্রডকাস্ট (সেফ কল যাতে কোনোভাবে 500 না দেয়)
+    // Socket.io ব্রডকাস্ট (সেফ কল)
     try {
       const io = req.app.get('io');
       if (io) {
         io.to(validBoardId.toString()).emit('task:created', populatedTask || newTask);
       }
     } catch (socketErr) {
-      console.error('Socket emit error ignored:', socketErr.message);
+      console.error('Socket emit ignored:', socketErr.message);
     }
 
     return res.status(201).json(populatedTask || newTask);
   } catch (error) {
     console.error('CRITICAL: Create Task Server 500 Error ->', error);
     return res.status(500).json({ 
-      message: 'Server error while creating task: ' + error.message,
-      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
+      message: 'Server error while creating task: ' + error.message 
     });
   }
 };
