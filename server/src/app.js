@@ -8,17 +8,10 @@ import commentRoutes from './routes/commentRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import sprintRoutes from './routes/sprintRoutes.js';
 import channelRoutes from './routes/channelRoutes.js';
-import messageRoutes from './routes/messageRoutes.js';
-import { isAllowedOrigin } from './config/cors.js';
 
 const app = express();
 
-app.use(cors({
-  origin(origin, callback) {
-    return callback(null, isAllowedOrigin(origin));
-  },
-  credentials: true,
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -34,7 +27,6 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/sprints', sprintRoutes);
 app.use('/api/channels', channelRoutes);
-app.use('/api/messages', messageRoutes);
 
 // Health Check
 app.get('/health', (req, res) => res.json({ status: 'ok', server: 'Live' }));

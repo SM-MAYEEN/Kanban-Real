@@ -1,36 +1,29 @@
-import { ChannelMessage } from '../models/ChannelMessage.js';
-
 // মেসেজে ইমোজি রিয়েকশন টগল করা
 export const toggleReaction = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { emoji } = req.body || {};
-    const userId = req.user._id;
+    const { emoji } = req.body;
+    const userId = req.user.id;
 
-    if (typeof emoji !== 'string' || !emoji.trim()) {
-      return res.status(400).json({ message: 'A reaction emoji is required' });
-    }
-    const normalizedEmoji = emoji.trim();
-
-    const message = await ChannelMessage.findById(messageId);
+    const message = await Message.findById(messageId);
     if (!message) return res.status(404).json({ message: 'মেসেজ পাওয়া যায়নি' });
 
     // রিয়েকশন অ্যারে চেক করা
-    let reactionItem = message.reactions.find((r) => r.emoji === normalizedEmoji);
+    let reactionItem = message.reactions.find((r) => r.emoji === emoji);
 
     if (reactionItem) {
-      const userIndex = reactionItem.users.findIndex((id) => id.equals(userId));
+      const userIndex = reactionItem.users.indexOf(userId);
       if (userIndex > -1) {
         // আগেই দেওয়া থাকলে রিমুভ হবে
         reactionItem.users.splice(userIndex, 1);
         if (reactionItem.users.length === 0) {
-          message.reactions = message.reactions.filter((r) => r.emoji !== normalizedEmoji);
+          message.reactions = message.reactions.filter((r) => r.emoji !== emoji);
         }
       } else {
         reactionItem.users.push(userId);
       }
     } else {
-      message.reactions.push({ emoji: normalizedEmoji, users: [userId] });
+      message.reactions.push({ emoji, users: [userId] });
     }
 
     await message.save();
@@ -39,9 +32,8 @@ export const toggleReaction = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.emit('message_reaction_updated', { messageId, reactions: message.reactions });
 
-    return res.status(200).json(message);
+    res.status(200).json(message);
   } catch (err) {
-    console.error('Toggle message reaction error:', err);
-    return res.status(500).json({ message: 'Unable to update message reaction' });
+    res.status(500).json({ error: err.message });
   }
 };

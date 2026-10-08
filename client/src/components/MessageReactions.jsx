@@ -1,17 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import API from '../api/axiosInstance';
 import { useAuthStore } from '../store/authStore';
 
 const QUICK_EMOJIS = ['👍', '🚀', '❤️', '🔥', '🎉'];
 
 export default function MessageReactions({ message }) {
-  const currentUser = useAuthStore((state) => state.user);
-  const currentUserId = currentUser?._id || currentUser?.id;
+  const currentUserId = useAuthStore((state) => state.user?._id);
   const [reactions, setReactions] = useState(message.reactions || []);
-
-  useEffect(() => {
-    setReactions(message.reactions || []);
-  }, [message.reactions]);
 
   const handleReact = async (emoji) => {
     try {
@@ -26,7 +21,7 @@ export default function MessageReactions({ message }) {
     <div className="flex items-center gap-1.5 mt-2 flex-wrap">
       {/* অলরেডি দেওয়া রিয়েকশন লিস্ট */}
       {reactions.map((r, i) => {
-        const hasReacted = r.users?.some((id) => String(id) === String(currentUserId));
+        const hasReacted = r.users?.includes(currentUserId);
         return (
           <button
             key={i}
@@ -38,7 +33,7 @@ export default function MessageReactions({ message }) {
             }`}
           >
             <span>{r.emoji}</span>
-            <span className="text-[10px]">{r.users?.length || 0}</span>
+            <span className="text-[10px]">{r.users.length}</span>
           </button>
         );
       })}

@@ -95,10 +95,10 @@ export const resetPassword = async (req, res) => {
 // @route PUT /api/auth/change-password
 export const changePassword = async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body || {};
+    const { currentPassword, newPassword } = req.body;
     const userId = req.user._id || req.user.id;
 
-    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
+    if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Current and new password are required' });
     }
 
@@ -112,11 +112,8 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ message: 'Current password does not match' });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
-    }
-
-    user.password = newPassword;
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
     await user.save();
 
     res.status(200).json({ message: 'Password updated successfully' });
@@ -139,10 +136,13 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const user = await User.create({
       name,
       email: email.toLowerCase().trim(),
-      password,
+      password: hashedPassword,
     });
 
     res.status(201).json({
