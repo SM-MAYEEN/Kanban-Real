@@ -1,5 +1,6 @@
 import { Task } from '../models/Task.js';
 import { Activity } from '../models/Activity.js';
+import mongoose from 'mongoose';
 
 export const createTask = async (req, res) => {
   try {
@@ -19,62 +20,112 @@ export const createTask = async (req, res) => {
       blockedBy,
     } = req.body;
 
-    if (!title || !boardId || !columnId) {
-      return res.status(400).json({ message: 'Title, boardId, and columnId are required' });
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: 'Task title is required' });
     }
 
-    const columnTaskCount = await Task.countDocuments({ columnId });
-    const boardTotalTasks = await Task.countDocuments({ boardId });
+    if (!boardId || !columnId) {
+      return res.status(400).json({ message: 'Valid boardId and columnId are required' });
+    }
+
+    // Mongoose ObjectId Validation (500 CastError প্রতিরোধ)
+    const validBoardId = mongoose.isValidObjectId(boardId) ? boardId : null;
+    const validColumnId = mongoose.isValidObjectId(columnId) ? columnId : null;
+
+    if (!validBoardId || !validColumnId) {
+      return res.status(400).json({ message: 'Invalid Board ID or Column ID format' });
+    }
+
+    const columnTaskCount = await Task.countDocuments({ columnId: validColumnId });
+    const boardTotalTasks = await Task.countDocuments({ boardId: validBoardId });
     const taskKey = `KAN-${boardTotalTasks + 1}`;
 
-    const task = await Task.create({
+    // Subtasks ক্লিন ফরম্যাটিং
+    const sanitizedSubtasks = Array.isArray(subtasks)
+      ? subtasks
+          .map((st) => {
+            if (typeof st === 'string') return { title: st, completed: false };
+            if (st && typeof st === 'object') return { title: st.title || '', completed: Boolean(st.completed) };
+            return null;
+          })
+          .filter((st) => st && st.title.trim())
+      : [];
+
+    // BlockedBy সেফ ফরম্যাটিং
+    const sanitizedBlockedBy = Array.isArray(blockedBy)
+      ? blockedBy.filter((id) => mongoose.isValidObjectId(id))
+      : [];
+
+    const newTask = await Task.create({
       key: taskKey,
       title: title.trim(),
-      description: description || '',
+      description: description ? description.trim() : '',
       issueType: issueType || 'Task',
       storyPoints: Number(storyPoints) || 1,
       estimatedHours: Number(estimatedHours) || 0,
       loggedHours: 0,
-      boardId,
-      columnId,
-      sprintId: sprintId || null,
-      blockedBy: blockedBy || [],
-      dueDate: dueDate || null,
+      boardId: validBoardId,
+      columnId: validColumnId,
+      sprintId: mongoose.isValidObjectId(sprintId) ? sprintId : null,
+      blockedBy: sanitizedBlockedBy,
+      dueDate: dueDate ? new Date(dueDate) : null,
       priority: priority || 'Medium',
-      tags: tags || [],
-      subtasks: subtasks || [],
+      tags: Array.isArray(tags) ? tags : [],
+      subtasks: sanitizedSubtasks,
       order: columnTaskCount,
     });
 
-    const populatedTask = await Task.findById(task._id)
-      .populate('assignedTo', 'name email avatar')
-      .populate('blockedBy', 'key title');
-
-    if (req.user) {
-      await Activity.create({
-        boardId,
-        user: req.user._id,
-        action: 'CREATED_TASK',
-        details: `created [${taskKey}] "${task.title}" (${task.issueType})`,
-      });
+    // Populate (সেফটি ট্রাই-ক্যাচ সহ)
+    let populatedTask;
+    try {
+      populatedTask = await Task.findById(newTask._id)
+        .populate('assignedTo', 'name email avatar')
+        .populate('blockedBy', 'key title');
+    } catch {
+      populatedTask = newTask;
     }
 
-    // Socket.io রিয়েলটাইম ব্রডকাস্ট
-    const io = req.app.get('io');
-    if (io) {
-      io.to(boardId.toString()).emit('task:created', populatedTask);
+    // অ্যাক্টিভিটি লগ (ইউজার অথেন্টিকেটেড থাকলে)
+    if (req.user && req.user._id) {
+      try {
+        await Activity.create({
+          boardId: validBoardId,
+          user: req.user._id,
+          action: 'CREATED_TASK',
+          details: `created [${taskKey}] "${newTask.title}"`,
+        });
+      } catch (actErr) {
+        console.error('Activity creation error ignored:', actErr.message);
+      }
     }
 
-    res.status(201).json(populatedTask);
+    // Socket.io ব্রডকাস্ট (সেফ কল যাতে কোনোভাবে 500 না দেয়)
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(validBoardId.toString()).emit('task:created', populatedTask || newTask);
+      }
+    } catch (socketErr) {
+      console.error('Socket emit error ignored:', socketErr.message);
+    }
+
+    return res.status(201).json(populatedTask || newTask);
   } catch (error) {
-    console.error('Create Task Server Error:', error);
-    res.status(500).json({ message: error.message });
+    console.error('CRITICAL: Create Task Server 500 Error ->', error);
+    return res.status(500).json({ 
+      message: 'Server error while creating task: ' + error.message,
+      stack: process.env.NODE_ENV === 'production' ? undefined : error.stack
+    });
   }
 };
 
 export const updateTask = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid Task ID' });
+    }
+
     const updatedTask = await Task.findByIdAndUpdate(id, req.body, {
       new: true,
       runValidators: true,
@@ -117,13 +168,20 @@ export const logTaskTime = async (req, res) => {
 export const deleteTask = async (req, res) => {
   try {
     const { id } = req.params;
-    const task = await Task.findByIdAndDelete(id);
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: 'Invalid Task ID' });
+    }
 
+    const task = await Task.findByIdAndDelete(id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
 
-    const io = req.app.get('io');
-    if (io) {
-      io.to(task.boardId.toString()).emit('task:deleted', id);
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(task.boardId.toString()).emit('task:deleted', id);
+      }
+    } catch (socketErr) {
+      console.error('Socket delete emit ignored:', socketErr.message);
     }
 
     res.json({ message: 'Task deleted successfully', taskId: id, boardId: task.boardId });
