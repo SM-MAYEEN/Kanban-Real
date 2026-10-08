@@ -8,15 +8,40 @@ export const useBoardStore = create((set, get) => ({
   loading: false,
   error: null,
 
-  // বোর্ড ডাটা ও টাস্ক লোড করা
   fetchBoardDetails: async (boardId) => {
     set({ loading: true, error: null });
     try {
       const res = await API.get(`/boards/${boardId}`);
-      // API রেসপন্স ফরম্যাট হ্যান্ডলিং
-      const boardData = res.data.board || res.data;
-      const columnsData = res.data.columns || boardData.columns || [];
-      const tasksData = res.data.tasks || boardData.tasks || [];
+      
+      const resData = res.data || {};
+      const boardData = resData.board || (resData._id ? resData : null);
+      
+      // কলাম ও টাস্ক যেকোনো ফরমেটেই আসুক না কেন সেফলি এক্সট্র্যাক্ট করা
+      let columnsData = [];
+      if (Array.isArray(resData.columns)) {
+        columnsData = resData.columns;
+      } else if (boardData && Array.isArray(boardData.columns)) {
+        columnsData = boardData.columns;
+      }
+
+      let tasksData = [];
+      if (Array.isArray(resData.tasks)) {
+        tasksData = resData.tasks;
+      } else if (boardData && Array.isArray(boardData.tasks)) {
+        tasksData = boardData.tasks;
+      }
+
+      // যদি টাস্ক আলাদা এন্ডপয়েন্ট থেকে আসে, তাও ব্যাকআপ ফেচ
+      if (tasksData.length === 0) {
+        try {
+          const taskRes = await API.get(`/tasks/board/${boardId}`);
+          if (Array.isArray(taskRes.data)) {
+            tasksData = taskRes.data;
+          }
+        } catch {
+          // ইগনোর যদি আলাদা রাউট না থাকে
+        }
+      }
 
       set({
         board: boardData,
@@ -30,25 +55,24 @@ export const useBoardStore = create((set, get) => ({
     }
   },
 
-  // নতুন টাস্ক যোগ করা (বুলেটপ্রুফ স্টেট আপডেট)
   addTask: async (taskData) => {
     try {
       const res = await API.post('/tasks', taskData);
-      
-      // ব্যাকএন্ড রেসপন্স থেকে সঠিক টাস্ক অবজেক্ট নেওয়া
       const createdTask = res.data.task || res.data;
 
-      // কলাম আইডি নিশ্চিত করা
+      // কলাম আইডি ও বোর্ড আইডি নরম্যালাইজ
       const normalizedTask = {
         ...createdTask,
-        columnId: createdTask.columnId || createdTask.column || taskData.columnId,
-        boardId: createdTask.boardId || createdTask.board || taskData.boardId,
+        columnId: (createdTask.columnId?._id || createdTask.columnId || createdTask.column?._id || createdTask.column || taskData.columnId)?.toString(),
+        boardId: (createdTask.boardId?._id || createdTask.boardId || createdTask.board || taskData.boardId)?.toString(),
       };
 
-      // Zustand স্টেট আপডেট (নতুন টাস্ক সরাসরি অ্যারেতে পুশ)
-      set((state) => ({
-        tasks: [...state.tasks, normalizedTask],
-      }));
+      set((state) => {
+        // ডুপ্লিকেট টাস্ক প্রতিরোধ
+        const exists = state.tasks.some((t) => t._id?.toString() === normalizedTask._id?.toString());
+        if (exists) return state;
+        return { tasks: [...state.tasks, normalizedTask] };
+      });
 
       return normalizedTask;
     } catch (err) {
@@ -57,25 +81,22 @@ export const useBoardStore = create((set, get) => ({
     }
   },
 
-  // টাস্ক সরানো (Drag & Drop)
   moveTask: async (taskId, sourceColId, destColId, newIndex) => {
     const prevTasks = [...get().tasks];
 
-    // অপটিমিস্টিক UI আপডেট
-    set((state) => {
-      const updatedTasks = state.tasks.map((t) => {
-        if (t._id === taskId) {
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t._id?.toString() === taskId?.toString()) {
           return {
             ...t,
-            columnId: destColId,
-            column: destColId,
+            columnId: destColId?.toString(),
+            column: destColId?.toString(),
             order: newIndex,
           };
         }
         return t;
-      });
-      return { tasks: updatedTasks };
-    });
+      }),
+    }));
 
     try {
       await API.put(`/tasks/${taskId}/move`, {
@@ -84,43 +105,48 @@ export const useBoardStore = create((set, get) => ({
       });
     } catch (err) {
       console.error('Move Task Error:', err);
-      // ব্যর্থ হলে আগের স্টেটে ফিরিয়ে আনা
       set({ tasks: prevTasks });
     }
   },
 
-  // টাস্ক মুছে ফেলা
   deleteTask: async (taskId) => {
     try {
       await API.delete(`/tasks/${taskId}`);
       set((state) => ({
-        tasks: state.tasks.filter((t) => t._id !== taskId),
+        tasks: state.tasks.filter((t) => t._id?.toString() !== taskId?.toString()),
       }));
     } catch (err) {
       console.error('Delete Task Error:', err);
     }
   },
 
-  // Socket.io রিয়েল-টাইম হ্যান্ডলারসমূহ
   handleTaskCreatedRemote: (newTask) => {
     const taskObj = newTask.task || newTask;
+    const normalizedTask = {
+      ...taskObj,
+      columnId: (taskObj.columnId?._id || taskObj.columnId || taskObj.column?._id || taskObj.column)?.toString(),
+    };
     set((state) => {
-      if (state.tasks.some((t) => t._id === taskObj._id)) return state;
-      return { tasks: [...state.tasks, taskObj] };
+      if (state.tasks.some((t) => t._id?.toString() === normalizedTask._id?.toString())) {
+        return state;
+      }
+      return { tasks: [...state.tasks, normalizedTask] };
     });
   },
 
   handleTaskMovedRemote: ({ taskId, columnId, order }) => {
     set((state) => ({
       tasks: state.tasks.map((t) =>
-        t._id === taskId ? { ...t, columnId, column: columnId, order } : t
+        t._id?.toString() === taskId?.toString()
+          ? { ...t, columnId: columnId?.toString(), column: columnId?.toString(), order }
+          : t
       ),
     }));
   },
 
   handleTaskDeletedRemote: (taskId) => {
     set((state) => ({
-      tasks: state.tasks.filter((t) => t._id !== taskId),
+      tasks: state.tasks.filter((t) => t._id?.toString() !== taskId?.toString()),
     }));
   },
 }));

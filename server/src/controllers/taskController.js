@@ -19,13 +19,17 @@ export const createTask = async (req, res) => {
       blockedBy,
     } = req.body;
 
+    if (!title || !boardId || !columnId) {
+      return res.status(400).json({ message: 'Title, boardId, and columnId are required' });
+    }
+
     const columnTaskCount = await Task.countDocuments({ columnId });
     const boardTotalTasks = await Task.countDocuments({ boardId });
     const taskKey = `KAN-${boardTotalTasks + 1}`;
 
     const task = await Task.create({
       key: taskKey,
-      title,
+      title: title.trim(),
       description: description || '',
       issueType: issueType || 'Task',
       storyPoints: Number(storyPoints) || 1,
@@ -55,8 +59,15 @@ export const createTask = async (req, res) => {
       });
     }
 
+    // Socket.io রিয়েলটাইম ব্রডকাস্ট
+    const io = req.app.get('io');
+    if (io) {
+      io.to(boardId.toString()).emit('task:created', populatedTask);
+    }
+
     res.status(201).json(populatedTask);
   } catch (error) {
+    console.error('Create Task Server Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -109,6 +120,11 @@ export const deleteTask = async (req, res) => {
     const task = await Task.findByIdAndDelete(id);
 
     if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(task.boardId.toString()).emit('task:deleted', id);
+    }
 
     res.json({ message: 'Task deleted successfully', taskId: id, boardId: task.boardId });
   } catch (error) {

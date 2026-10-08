@@ -240,7 +240,7 @@ export default function BoardView() {
 
     const totalPoints = tasks.reduce((sum, t) => sum + (t.storyPoints || 1), 0);
     const doneCol = columns.find((c) => /done|completed/i.test(c.title));
-    const completedTasks = doneCol ? tasks.filter((t) => t.columnId === doneCol._id) : [];
+    const completedTasks = doneCol ? tasks.filter((t) => (t.columnId?._id || t.columnId || t.column)?.toString() === doneCol._id?.toString()) : [];
     const completedPoints = completedTasks.reduce((sum, t) => sum + (t.storyPoints || 1), 0);
 
     const burndownDays = [
@@ -279,8 +279,7 @@ export default function BoardView() {
       destination.index === source.index
     ) return;
 
-    // টার্গেট কলাম যদি 'Done' হয় তবে সাকসেস সাউন্ড বাজবে
-    const destColumn = columns.find((c) => c._id === destination.droppableId);
+    const destColumn = columns.find((c) => c._id?.toString() === destination.droppableId?.toString());
     if (destColumn && /done|completed/i.test(destColumn.title)) {
       playSuccessSwoosh();
     }
@@ -360,7 +359,7 @@ export default function BoardView() {
     try {
       const res = await API.put(`/tasks/${taskId}`, { sprintId });
       useBoardStore.setState((state) => ({
-        tasks: state.tasks.map((t) => (t._id === taskId ? res.data : t)),
+        tasks: state.tasks.map((t) => (t._id?.toString() === taskId?.toString() ? res.data : t)),
       }));
     } catch (err) {
       console.error(err);
@@ -377,7 +376,6 @@ export default function BoardView() {
 
   return (
     <div className="h-screen w-screen bg-[#07090e] text-slate-100 flex overflow-hidden selection:bg-amber-500/30 selection:text-amber-200">
-      {/* স্ল্যাক সাইডবার */}
       <SlackSidebar
         currentView={currentView}
         setCurrentView={(view) => {
@@ -398,9 +396,7 @@ export default function BoardView() {
         setIsMobileOpen={setIsMobileMenuOpen}
       />
 
-      {/* ডানপাশের মূল স্ক্রিন */}
       <div className="flex-1 h-screen flex flex-col overflow-hidden">
-        {/* টপ হেডার ও সার্চ বার */}
         <header className="h-16 shrink-0 px-4 sm:px-6 border-b border-amber-500/20 bg-[#0c1120]/90 backdrop-blur-md flex items-center justify-between z-20">
           <div className="flex items-center gap-2 sm:gap-3 flex-1 max-w-md">
             <button
@@ -420,7 +416,6 @@ export default function BoardView() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* View Switching Quick Tabs */}
             <div className="hidden sm:flex items-center bg-slate-950 p-1 rounded-xl border border-white/10">
               <button
                 onClick={() => setCurrentView('kanban')}
@@ -448,7 +443,6 @@ export default function BoardView() {
               </button>
             </div>
 
-            {/* + Create Issue Button */}
             <button
               onClick={() => openCreateModal(columns[0]?._id)}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-xs shadow-md transition active:scale-95 flex items-center gap-1.5 shrink-0"
@@ -456,7 +450,6 @@ export default function BoardView() {
               <span>{t.createIssue}</span>
             </button>
 
-            {/* Export CSV Button */}
             <button
               onClick={() => exportBoardToCSV(board?.title || 'Board', tasks)}
               className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
@@ -465,7 +458,6 @@ export default function BoardView() {
               <span className="hidden md:inline">{t.exportCsv}</span>
             </button>
 
-            {/* Priority Filter */}
             <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-400">
               <span>{t.priority}</span>
               <select
@@ -480,7 +472,6 @@ export default function BoardView() {
               </select>
             </div>
 
-            {/* অ্যাক্টিভিটি বাটন */}
             <button
               onClick={() => setIsActivityOpen(!isActivityOpen)}
               className={`p-2 rounded-xl border text-xs font-bold transition flex items-center gap-1 ${
@@ -494,7 +485,6 @@ export default function BoardView() {
           </div>
         </header>
 
-        {/* ভিউ কন্টেন্ট */}
         {currentView === 'channel' ? (
           <ChannelChat
             channel={selectedChannel}
@@ -571,7 +561,7 @@ export default function BoardView() {
               </div>
 
               {sprints.map((sprint) => {
-                const sprintTasks = tasks.filter((t) => t.sprintId === sprint._id);
+                const sprintTasks = tasks.filter((t) => t.sprintId?.toString() === sprint._id?.toString());
                 const sprintPoints = sprintTasks.reduce((acc, curr) => acc + (curr.storyPoints || 0), 0);
 
                 return (
@@ -643,7 +633,6 @@ export default function BoardView() {
                 );
               })}
 
-              {/* Unassigned Backlog */}
               <div className="bg-slate-900/60 p-5 rounded-2xl border border-white/10 space-y-3">
                 <h3 className="font-bold text-sm text-white">{t.backlogBoxTitle} ({tasks.filter((t) => !t.sprintId).length} {t.issuesCount})</h3>
                 <div className="space-y-2">
@@ -686,18 +675,17 @@ export default function BoardView() {
             </div>
           </main>
         ) : (
-          /* কানবান বোর্ড */
           <main className="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6 z-10">
             <DragDropContext onDragEnd={onDragEnd}>
               <div className="flex gap-6 h-full items-start">
                 {columns.map((column) => {
                   const columnTasks = filteredTasks
-  .filter((t) => {
-    // columnId স্ট্রিং, অবজেক্ট কিংবা column যে নামেই থাকুক না কেন সঠিকভাবে ম্যাচ করবে
-    const taskColId = (t.columnId?._id || t.columnId || t.column?._id || t.column)?.toString();
-    return taskColId === column._id?.toString();
-  })
-  .sort((a, b) => (a.order || 0) - (b.order || 0));
+                    .filter((t) => {
+                      const taskColId = (t.columnId?._id || t.columnId || t.column?._id || t.column)?.toString();
+                      const colId = (column._id?._id || column._id)?.toString();
+                      return taskColId && colId && taskColId === colId;
+                    })
+                    .sort((a, b) => (a.order || 0) - (b.order || 0));
 
                   return (
                     <Column
@@ -724,7 +712,6 @@ export default function BoardView() {
                   );
                 })}
 
-                {/* Add Column */}
                 <div className="w-72 shrink-0">
                   {showAddColumn ? (
                     <form
@@ -779,7 +766,6 @@ export default function BoardView() {
         )}
       </div>
 
-      {/* Burndown / Velocity Analytics Modal */}
       {showBurndownModal && analyticsData && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[85vh] p-6 text-slate-100 shadow-2xl flex flex-col">
@@ -829,7 +815,6 @@ export default function BoardView() {
         </div>
       )}
 
-      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl text-slate-100 relative">
@@ -863,7 +848,6 @@ export default function BoardView() {
         </div>
       )}
 
-      {/* Task Creation Modal */}
       <CreateTaskModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -872,7 +856,6 @@ export default function BoardView() {
         onAdd={addTask}
       />
 
-      {/* Task Detail Modal */}
       <TaskDetailModal
         isOpen={!!selectedTask}
         task={selectedTask}
@@ -882,13 +865,12 @@ export default function BoardView() {
         onDeleteTask={deleteTask}
         onTaskUpdated={(updatedTask) => {
           useBoardStore.setState((state) => ({
-            tasks: state.tasks.map((t) => (t._id === updatedTask._id ? updatedTask : t)),
+            tasks: state.tasks.map((t) => (t._id?.toString() === updatedTask._id?.toString() ? updatedTask : t)),
           }));
           setSelectedTask(updatedTask);
         }}
       />
 
-      {/* Activity Drawer */}
       <ActivityDrawer
         boardId={boardId}
         isOpen={isActivityOpen}
