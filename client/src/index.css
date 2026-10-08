@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-main: #060913;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --card-bg: rgba(11, 18, 33, 0.88);
+  --card-border: rgba(245, 158, 11, 0.22);
+}
+
+body {
+  background-color: #060913;
+  color: #f8fafc;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* 'K' Logo Animated Golden Breathing Effect */
+@keyframes goldenGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.35), inset 0 0 10px rgba(251, 191, 36, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.6), inset 0 0 14px rgba(255, 255, 255, 0.5);
+  }
+}
+
+.k-logo-animated {
+  animation: goldenGlow 3.5s infinite ease-in-out;
+}
+
+/* Solid Obsidian Glass Navbar */
+.solid-glass-navbar {
+  background: rgba(7, 11, 20, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Luxury Solid Glass Card */
+.luxury-glass-card {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: linear-gradient(135deg, rgba(13, 21, 39, 0.88) 0%, rgba(7, 11, 20, 0.96) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.luxury-glass-card:hover {
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 16px 35px -10px rgba(245, 158, 11, 0.18);
+  transform: translateY(-2px);
+}
