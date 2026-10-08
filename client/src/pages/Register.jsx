@@ -5,7 +5,6 @@ import { useAuthStore } from '../store/authStore';
 export default function Register() {
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get('inviteToken');
-  const boardId = searchParams.get('boardId');
   const emailParam = searchParams.get('email');
 
   const [name, setName] = useState('');
@@ -24,8 +23,8 @@ export default function Register() {
     e.preventDefault();
     const success = await register(name, email, password);
     if (success) {
-      if (inviteToken && boardId) {
-        navigate(`/invite?${searchParams.toString()}`);
+      if (inviteToken) {
+        navigate(`/invite/${encodeURIComponent(inviteToken)}`);
         return;
       }
       navigate('/dashboard');

@@ -97,7 +97,9 @@ export const getBoardDetails = async (req, res) => {
 
     const boardData = board.toObject();
     boardData.pendingInvites = isBoardOwner(board, req.user._id)
-      ? boardData.pendingInvites.map(({ token, ...invite }) => invite)
+      ? boardData.pendingInvites
+          .filter(({ approvedAt }) => !approvedAt)
+          .map(({ token, ...invite }) => invite)
       : [];
     res.json({ board: boardData, columns, tasks });
   } catch (error) {
@@ -132,7 +134,7 @@ export const addMemberByEmail = async (req, res) => {
       return res.status(400).json({ message: 'User is already a member of this board.' });
     }
 
-    const inviteToken = crypto.randomBytes(32).toString('hex');
+    const inviteToken = crypto.randomBytes(12).toString('base64url');
     board.pendingInvites = board.pendingInvites.filter((invite) => invite.email !== targetEmail);
     board.pendingInvites.push({
       email: targetEmail,
@@ -140,7 +142,7 @@ export const addMemberByEmail = async (req, res) => {
     });
     await board.save();
 
-    const inviteLink = `${clientUrl}/invite?inviteToken=${inviteToken}&boardId=${id}&email=${encodeURIComponent(targetEmail)}`;
+    const inviteLink = `${clientUrl}/invite/${inviteToken}`;
     void sendInviteEmail({
       toEmail: targetEmail,
       boardTitle: board.title,
@@ -155,7 +157,7 @@ export const addMemberByEmail = async (req, res) => {
       });
 
     res.json({
-      message: `Invitation created successfully for ${targetEmail}. Share the invitation link below; they must accept it before joining the board.`,
+      message: `Invitation created successfully for ${targetEmail}. They must accept the invitation and wait for team admin approval before joining.`,
       inviteLink,
       emailSent: null,
       pendingInvite: {
@@ -167,6 +169,33 @@ export const addMemberByEmail = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+export const getInviteDetails = async (req, res) => {
+  try {
+    const board = await Board.findOne({ 'pendingInvites.token': req.params.token })
+      .select('title pendingInvites');
+    const invite = board?.pendingInvites.find(
+      (pendingInvite) => pendingInvite.token === req.params.token
+    );
+    if (!board || !invite) {
+      return res.status(404).json({ message: 'This invitation is invalid or has expired.' });
+    }
+
+    res.json({
+      boardId: board._id,
+      boardTitle: board.title,
+      email: invite.email,
+      status: invite.approvedAt
+        ? 'approved'
+        : invite.acceptedAt
+          ? 'pending_admin_approval'
+          : 'pending_acceptance',
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ইনভাইট টোকেন অ্যাকসেপ্ট করে বোর্ডে যোগ হওয়া
 export const acceptInviteToken = async (req, res) => {
   try {
@@ -186,6 +215,9 @@ export const acceptInviteToken = async (req, res) => {
     }
     if (validInvite.email.toLowerCase() !== req.user.email.toLowerCase()) {
       return res.status(403).json({ message: 'This invitation was sent to a different email address.' });
+    }
+    if (validInvite.approvedAt) {
+      return res.json({ message: 'Invitation already approved.', status: 'approved', boardId });
     }
 
     if (!validInvite.acceptedAt) {
@@ -231,9 +263,7 @@ export const approveBoardInvite = async (req, res) => {
     if (!board.members.some((memberId) => memberId.toString() === invitedUser._id.toString())) {
       board.members.push(invitedUser._id);
     }
-    board.pendingInvites = board.pendingInvites.filter(
-      (pendingInvite) => pendingInvite.email.toLowerCase() !== email
-    );
+    invite.approvedAt = new Date();
     await board.save();
 
     res.json({ message: `${email} approved and added to the team.` });

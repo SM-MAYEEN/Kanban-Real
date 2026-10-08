@@ -21,6 +21,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/invite" element={<InviteAcceptance />} />
+        <Route path="/invite/:inviteToken" element={<InviteAcceptance />} />
         <Route
           path="/dashboard"
           element={

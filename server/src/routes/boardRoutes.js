@@ -12,11 +12,13 @@ import {
   cancelBoardInvite,
   acceptInviteToken,
   approveBoardInvite,
+  getInviteDetails,
 } from '../controllers/boardController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
+router.get('/invite/:token', getInviteDetails);
 router.use(protect);
 
 router.route('/').post(createBoard).get(getUserBoards);

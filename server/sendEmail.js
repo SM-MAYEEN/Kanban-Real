@@ -42,7 +42,7 @@ export const sendInviteEmail = async ({ toEmail, boardTitle, inviteLink, inviter
           <strong style="color: #ffffff; font-size: 16px;">"${boardTitle}"</strong>.
         </p>
         <p style="font-size: 13px; line-height: 1.6; color: #cbd5e1;">
-          Open the invitation link and sign in with this email address. If you already have an account, use that account. You will join the board only after you select <strong style="color: #fbbf24;">Accept invitation</strong>.
+          Open the invitation link and sign in with this email address. If you already have an account, use that account. After you accept, the team admin must approve your request before you can access the board.
         </p>
 
         <div style="text-align: center; margin: 35px 0;">

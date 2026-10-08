@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import API from '../api/axiosInstance';
 import { useAuthStore } from '../store/authStore';
 import { useLangStore } from '../store/langStore';
 
 export default function InviteAcceptance() {
   const [searchParams] = useSearchParams();
+  const { inviteToken: routeInviteToken } = useParams();
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -14,16 +15,52 @@ export default function InviteAcceptance() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [awaitingApproval, setAwaitingApproval] = useState(false);
+  const [inviteDetails, setInviteDetails] = useState(null);
+  const [loadingInvite, setLoadingInvite] = useState(Boolean(routeInviteToken));
 
-  const boardId = searchParams.get('boardId');
-  const inviteToken = searchParams.get('inviteToken');
-  const invitedEmail = searchParams.get('email') || '';
+  const inviteToken = routeInviteToken || searchParams.get('inviteToken');
+  const boardId = inviteDetails?.boardId || searchParams.get('boardId');
+  const invitedEmail = inviteDetails?.email || searchParams.get('email') || '';
   const hasInvite = Boolean(boardId && inviteToken && invitedEmail);
-  const query = searchParams.toString();
-  const loginLink = `/login?${query}`;
-  const registerLink = `/register?${query}`;
+  const authQuery = new URLSearchParams();
+  if (inviteToken) authQuery.set('inviteToken', inviteToken);
+  if (invitedEmail) authQuery.set('email', invitedEmail);
+  const loginLink = `/login?${authQuery.toString()}`;
+  const registerLink = `/register?${authQuery.toString()}`;
   const isBangla = language === 'bn';
   const isInvitedUser = user?.email?.toLowerCase() === invitedEmail.toLowerCase();
+
+  useEffect(() => {
+    if (!routeInviteToken) {
+      setInviteDetails(null);
+      setLoadingInvite(false);
+      return undefined;
+    }
+
+    let isCurrentRequest = true;
+    setLoadingInvite(true);
+    setError('');
+    API.get(`/boards/invite/${encodeURIComponent(routeInviteToken)}`)
+      .then((response) => {
+        if (isCurrentRequest) {
+          setInviteDetails(response.data);
+          setAwaitingApproval(response.data.status === 'pending_admin_approval');
+        }
+      })
+      .catch((err) => {
+        if (isCurrentRequest) {
+          setInviteDetails(null);
+          setError(err.response?.data?.message || (isBangla ? 'এই আমন্ত্রণটি অবৈধ বা মেয়াদোত্তীর্ণ।' : 'This invitation is invalid or has expired.'));
+        }
+      })
+      .finally(() => {
+        if (isCurrentRequest) setLoadingInvite(false);
+      });
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [routeInviteToken, isBangla]);
 
   const acceptInvitation = async () => {
     setLoading(true);
@@ -55,9 +92,11 @@ export default function InviteAcceptance() {
             {isBangla ? 'টিম আমন্ত্রণ' : 'Team invitation'}
           </h1>
           <p className="mt-2 text-sm text-slate-400">
-            {hasInvite
-              ? `${isBangla ? 'আমন্ত্রণটি পাঠানো হয়েছে' : 'This invitation was sent to'} ${invitedEmail}.`
-              : (isBangla ? 'এই আমন্ত্রণ লিংকটি অসম্পূর্ণ বা অবৈধ।' : 'This invitation link is incomplete or invalid.')}
+            {loadingInvite
+              ? (isBangla ? 'আমন্ত্রণ যাচাই করা হচ্ছে…' : 'Verifying invitation…')
+              : hasInvite
+                ? `${isBangla ? 'আমন্ত্রণটি পাঠানো হয়েছে' : 'This invitation was sent to'} ${invitedEmail}.`
+                : (isBangla ? 'এই আমন্ত্রণ লিংকটি অসম্পূর্ণ বা অবৈধ।' : 'This invitation link is incomplete or invalid.')}
           </p>
         </div>
 

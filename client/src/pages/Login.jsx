@@ -20,7 +20,11 @@ export default function Login() {
     const success = await login(email, password);
     if (success) {
       const inviteQuery = new URLSearchParams(searchParams);
-      navigate(inviteQuery.has('inviteToken') ? `/invite?${inviteQuery}` : '/dashboard');
+      navigate(
+        inviteQuery.has('inviteToken')
+          ? `/invite/${encodeURIComponent(inviteQuery.get('inviteToken'))}`
+          : '/dashboard'
+      );
     }
   };
 

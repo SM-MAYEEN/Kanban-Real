@@ -29,6 +29,7 @@ const boardSchema = new mongoose.Schema(
         token: { type: String, required: true },
         invitedAt: { type: Date, default: Date.now },
         acceptedAt: { type: Date, default: null },
+        approvedAt: { type: Date, default: null },
       },
     ],
     isArchived: {
