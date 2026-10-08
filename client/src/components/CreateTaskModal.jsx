@@ -3,7 +3,15 @@ import AiSubtaskGenerator from './AiSubtaskGenerator';
 import { useLangStore } from '../store/langStore';
 import { translations } from '../utils/translations';
 
-export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initialColumn = 'todo' }) {
+export default function CreateTaskModal({
+  isOpen,
+  onClose,
+  columnId,
+  boardId,
+  onAdd,
+  onCreateTask,
+  initialColumn,
+}) {
   const { language } = useLangStore();
   const t = translations[language] || translations.en;
 
@@ -13,9 +21,11 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
   const [storyPoints, setStoryPoints] = useState(1);
   const [subtasks, setSubtasks] = useState([]);
   const [newSubtaskInput, setNewSubtaskInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
+  // এআই থেকে সাবটাস্ক তৈরি হলে তালিকায় যোগ করা
   const handleAddAiSubtasks = (aiGeneratedList) => {
     const formatted = aiGeneratedList.map((item) => ({
       id: Date.now() + Math.random(),
@@ -25,39 +35,58 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
     setSubtasks((prev) => [...prev, ...formatted]);
   };
 
+  // নিজে লিখে সাবটাস্ক যোগ করা
   const handleAddManualSubtask = (e) => {
     e.preventDefault();
     if (!newSubtaskInput.trim()) return;
     setSubtasks((prev) => [
       ...prev,
-      { id: Date.now(), title: newSubtaskInput.trim(), completed: false },
+      { id: Date.now() + Math.random(), title: newSubtaskInput.trim(), completed: false },
     ]);
     setNewSubtaskInput('');
   };
 
+  // সাবটাস্ক রিমুভ করা
   const handleRemoveSubtask = (id) => {
     setSubtasks((prev) => prev.filter((st) => st.id !== id));
   };
 
-  const handleSubmit = (e) => {
+  // ফর্ম সাবমিট হ্যান্ডলার (onAdd এবং onCreateTask দুটোই সাপোর্ট করবে)
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    onCreateTask({
+    setSubmitting(true);
+
+    const taskPayload = {
       title: title.trim(),
       description: description.trim(),
       priority,
       storyPoints: Number(storyPoints) || 1,
-      status: initialColumn,
+      columnId: columnId || initialColumn,
+      boardId,
       subtasks,
-    });
+    };
 
-    setTitle('');
-    setDescription('');
-    setPriority('Medium');
-    setStoryPoints(1);
-    setSubtasks([]);
-    onClose();
+    try {
+      if (typeof onAdd === 'function') {
+        await onAdd(taskPayload);
+      } else if (typeof onCreateTask === 'function') {
+        await onCreateTask(taskPayload);
+      }
+
+      // ফর্ম রিসেট ও ক্লোজ
+      setTitle('');
+      setDescription('');
+      setPriority('Medium');
+      setStoryPoints(1);
+      setSubtasks([]);
+      onClose();
+    } catch (err) {
+      console.error('Task creation failed:', err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -67,12 +96,17 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
           <h3 className="text-base font-extrabold text-white flex items-center gap-2">
             <span className="text-amber-400">✨</span> {t.modalTitle}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-lg p-1">
+          <button
+            onClick={onClose}
+            type="button"
+            className="text-slate-400 hover:text-white text-lg p-1"
+          >
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* টাস্ক টাইটেল */}
           <div>
             <label className="text-xs font-bold text-slate-300 block mb-1">
               {t.taskNameLabel}
@@ -87,6 +121,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
             />
           </div>
 
+          {/* ডেসক্রিপশন */}
           <div>
             <label className="text-xs font-bold text-slate-300 block mb-1">
               {t.descLabel}
@@ -100,6 +135,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
             />
           </div>
 
+          {/* প্রায়োরিটি ও স্টোরি পয়েন্ট */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-300 block mb-1">
@@ -131,6 +167,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
             </div>
           </div>
 
+          {/* সাবটাস্ক সেকশন */}
           <div className="pt-2 border-t border-amber-500/20">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -150,7 +187,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
               <button
                 type="button"
                 onClick={handleAddManualSubtask}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold"
+                className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition"
               >
                 {t.add}
               </button>
@@ -184,6 +221,7 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
             </div>
           </div>
 
+          {/* বাটনসমূহ */}
           <div className="flex justify-end gap-2.5 pt-3 border-t border-amber-500/20">
             <button
               type="button"
@@ -194,9 +232,10 @@ export default function CreateTaskModal({ isOpen, onClose, onCreateTask, initial
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 active:scale-95"
+              disabled={submitting}
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 hover:from-amber-300 hover:to-amber-500 transition active:scale-95"
             >
-              {t.submitTask}
+              {submitting ? 'Creating...' : t.submitTask}
             </button>
           </div>
         </form>
