@@ -17,42 +17,42 @@ export default function ForgotPassword() {
 
   const handleReset = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setLoading(true);
     setStatus({ success: '', error: '' });
 
-    const payload = {
-      email: email.trim().toLowerCase(),
-      newPassword,
-    };
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !newPassword) {
+      setStatus({
+        error: language === 'bn' ? 'ইমেইল ও পাসওয়ার্ড প্রদান করুন!' : 'Please provide email and password.',
+        success: '',
+      });
+      setLoading(false);
+      return;
+    }
 
     try {
-      let res;
-      // Step 1: /api/auth/forgot-password call kora
-      try {
-        res = await API.post('/auth/forgot-password', payload);
-      } catch (err1) {
-        if (err1.response?.status === 404) {
-          // Step 2: Fallback hishebe /api/forgot-password call kora
-          res = await API.post('/forgot-password', payload);
-        } else {
-          throw err1;
-        }
-      }
+      // সরাসরি আমাদের এক্সপ্রেস ব্যাকএন্ডে হিট করবে (কোনো Firebase বা Email service কল হবে না)
+      const res = await API.post('/auth/forgot-password', {
+        email: cleanEmail,
+        newPassword: newPassword,
+      });
 
       setStatus({
-        success: res.data?.message || (language === 'bn' ? 'পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে!' : 'Password reset successful! Redirecting to login...'),
+        success: res.data?.message || (language === 'bn' ? 'পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে! লগইন করুন।' : 'Password updated successfully! Redirecting...'),
         error: '',
       });
 
-      // 1.5 second por login page-e niye jabe
       setTimeout(() => {
         navigate('/login');
       }, 1500);
     } catch (err) {
-      console.error('Password reset error:', err);
+      console.error('Password reset API error:', err);
+      // ব্যাকএন্ডের আসল এরর দেখানো
       const backendMessage = err.response?.data?.message || err.message;
       setStatus({
-        error: backendMessage || (language === 'bn' ? 'পাসওয়ার্ড পরিবর্তন করা যায়নি।' : 'Failed to update password.'),
+        error: backendMessage || (language === 'bn' ? 'পাসওয়ার্ড রিসেট করা যায়নি!' : 'Failed to update password.'),
         success: '',
       });
     } finally {
@@ -121,7 +121,7 @@ export default function ForgotPassword() {
             disabled={loading}
             className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-xs tracking-wider shadow-lg shadow-amber-500/25 transition active:scale-98 disabled:opacity-50"
           >
-            {loading ? (language === 'bn' ? 'আপডেট হচ্ছে...' : 'Updating...') : t.resetPassBtn}
+            {loading ? (language === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...') : t.resetPassBtn}
           </button>
         </form>
 
