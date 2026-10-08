@@ -2,6 +2,8 @@ import { Task } from '../models/Task.js';
 import { Column } from '../models/Column.js';
 import { Activity } from '../models/Activity.js';
 import mongoose from 'mongoose';
+import { findBoardForMember } from '../utils/boardAccess.js';
+import { Sprint } from '../models/Sprint.js';
 
 export const createTask = async (req, res) => {
   try {
@@ -34,6 +36,21 @@ export const createTask = async (req, res) => {
 
     if (!bId || !cId) {
       return res.status(400).json({ message: 'Invalid Board ID or Column ID format' });
+    }
+
+    const board = await findBoardForMember(bId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Board not found or you are not a member.' });
+    }
+    const column = await Column.findOne({ _id: cId, boardId: bId });
+    if (!column) {
+      return res.status(400).json({ message: 'Column does not belong to this board.' });
+    }
+    if (sprintId) {
+      const sprint = await Sprint.findOne({ _id: sprintId, boardId: bId });
+      if (!sprint) {
+        return res.status(400).json({ message: 'Sprint does not belong to this board.' });
+      }
     }
 
     // কলামের টাস্ক অর্ডার
@@ -171,7 +188,33 @@ export const updateTask = async (req, res) => {
       return res.status(400).json({ message: 'Invalid Task ID' });
     }
 
-    const updatedTask = await Task.findByIdAndUpdate(id, req.body, {
+    const task = await Task.findById(id);
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    const board = await findBoardForMember(task.boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Task not found or you are not a board member.' });
+    }
+
+    const updates = { ...req.body };
+    delete updates.boardId;
+    delete updates.board;
+    delete updates.key;
+    delete updates.creator;
+    delete updates.user;
+    if (updates.columnId) {
+      const column = await Column.findOne({ _id: updates.columnId, boardId: task.boardId });
+      if (!column) {
+        return res.status(400).json({ message: 'Column does not belong to this board.' });
+      }
+    }
+    if (updates.sprintId) {
+      const sprint = await Sprint.findOne({ _id: updates.sprintId, boardId: task.boardId });
+      if (!sprint) {
+        return res.status(400).json({ message: 'Sprint does not belong to this board.' });
+      }
+    }
+
+    const updatedTask = await Task.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,
     })
@@ -183,6 +226,95 @@ export const updateTask = async (req, res) => {
     }
 
     res.json(updatedTask);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const moveTask = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { columnId, order } = req.body;
+    if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(columnId)) {
+      return res.status(400).json({ message: 'Invalid task or column ID.' });
+    }
+    const newIndex = Number(order);
+    if (!Number.isInteger(newIndex) || newIndex < 0) {
+      return res.status(400).json({ message: 'Task order must be a non-negative integer.' });
+    }
+
+    const task = await Task.findById(id);
+    if (!task) return res.status(404).json({ message: 'Task not found.' });
+    const board = await findBoardForMember(task.boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Task not found or you are not a board member.' });
+    }
+
+    const destinationColumn = await Column.findOne({
+      _id: columnId,
+      boardId: task.boardId,
+    });
+    if (!destinationColumn) {
+      return res.status(400).json({ message: 'Destination column does not belong to this board.' });
+    }
+
+    const sourceColumnId = task.columnId.toString();
+    const destinationColumnId = destinationColumn._id.toString();
+    const sourceTasks = await Task.find({
+      boardId: board._id,
+      columnId: task.columnId,
+      _id: { $ne: task._id },
+    }).sort({ order: 1, createdAt: 1, _id: 1 });
+    let finalOrder;
+
+    if (sourceColumnId === destinationColumnId) {
+      const orderedTasks = sourceTasks;
+      finalOrder = Math.min(newIndex, orderedTasks.length);
+      orderedTasks.splice(finalOrder, 0, task);
+      await Task.bulkWrite(orderedTasks.map((item, index) => ({
+        updateOne: {
+          filter: { _id: item._id },
+          update: { $set: { columnId: destinationColumn._id, order: index } },
+        },
+      })));
+    } else {
+      const destinationTasks = await Task.find({
+        boardId: board._id,
+        columnId: destinationColumn._id,
+      }).sort({ order: 1, createdAt: 1, _id: 1 });
+      finalOrder = Math.min(newIndex, destinationTasks.length);
+      destinationTasks.splice(finalOrder, 0, task);
+
+      await Task.bulkWrite([
+        ...sourceTasks.map((item, index) => ({
+          updateOne: {
+            filter: { _id: item._id },
+            update: { $set: { order: index } },
+          },
+        })),
+        ...destinationTasks.map((item, index) => ({
+          updateOne: {
+            filter: { _id: item._id },
+            update: { $set: { columnId: destinationColumn._id, order: index } },
+          },
+        })),
+      ]);
+    }
+
+    const movedTask = await Task.findById(id)
+      .populate('assignedTo', 'name email avatar')
+      .populate('blockedBy', 'key title');
+    const io = req.app.get('io');
+    if (io) {
+      io.to(board._id.toString()).emit('task:moved', {
+        taskId: id,
+        sourceColumnId,
+        destinationColumnId,
+        newOrder: finalOrder,
+      });
+    }
+
+    res.json(movedTask);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -200,6 +332,10 @@ export const logTaskTime = async (req, res) => {
 
     const task = await Task.findById(id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
+    const board = await findBoardForMember(task.boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Task not found or you are not a board member.' });
+    }
 
     task.loggedHours = Number((task.loggedHours + hoursToAdd).toFixed(2));
     await task.save();
@@ -215,6 +351,13 @@ export const deleteTask = async (req, res) => {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ message: 'Invalid Task ID' });
+    }
+
+    const existingTask = await Task.findById(id);
+    if (!existingTask) return res.status(404).json({ message: 'Task not found' });
+    const board = await findBoardForMember(existingTask.boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Task not found or you are not a board member.' });
     }
 
     const task = await Task.findByIdAndDelete(id);

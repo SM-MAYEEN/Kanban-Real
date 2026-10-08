@@ -2,6 +2,8 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User.js';
 import { Task } from '../models/Task.js';
 import { Activity } from '../models/Activity.js';
+import { Column } from '../models/Column.js';
+import { findBoardForMember } from '../utils/boardAccess.js';
 
 // বর্তমানে কানেক্টেড ইউজারদের তালিকা (Set of User IDs)
 const onlineUsers = new Map();
@@ -38,8 +40,18 @@ export const initializeSocket = (io) => {
     // সব ক্লায়েন্টকে বর্তমান অনলাইন ইউজারদের তালিকা পাঠানো
     io.emit('users:online', Array.from(onlineUsers.keys()));
 
-    socket.on('board:join', (boardId) => {
-      socket.join(boardId);
+    socket.on('board:join', async (boardId) => {
+      try {
+        const board = await findBoardForMember(boardId, socket.user._id);
+        if (!board) {
+          socket.emit('board:access-denied', { boardId });
+          return;
+        }
+        socket.join(board._id.toString());
+      } catch (error) {
+        console.error('Socket board:join error:', error.message);
+        socket.emit('board:access-denied', { boardId });
+      }
     });
 
     socket.on('board:leave', (boardId) => {
@@ -52,6 +64,13 @@ export const initializeSocket = (io) => {
 
         const task = await Task.findById(taskId);
         if (!task) return;
+        const board = await findBoardForMember(boardId, socket.user._id);
+        if (!board || task.boardId.toString() !== board._id.toString()) return;
+        const destinationColumn = await Column.findOne({
+          _id: destinationColumnId,
+          boardId: board._id,
+        });
+        if (!destinationColumn) return;
 
         task.columnId = destinationColumnId;
         task.order = newOrder;
@@ -82,12 +101,28 @@ export const initializeSocket = (io) => {
       }
     });
 
-    socket.on('task:created', ({ boardId, task }) => {
-      socket.to(boardId).emit('task:created', task);
+    socket.on('task:created', async ({ boardId, task }) => {
+      try {
+        const board = await findBoardForMember(boardId, socket.user._id);
+        const storedTask = task?._id ? await Task.findById(task._id).select('boardId') : null;
+        if (board && storedTask?.boardId.toString() === board._id.toString()) {
+          socket.to(board._id.toString()).emit('task:created', task);
+        }
+      } catch (error) {
+        console.error('Socket task:created error:', error.message);
+      }
     });
 
-    socket.on('comment:create', ({ boardId, taskId, comment }) => {
-      socket.to(boardId).emit('comment:added', { taskId, comment });
+    socket.on('comment:create', async ({ boardId, taskId, comment }) => {
+      try {
+        const board = await findBoardForMember(boardId, socket.user._id);
+        const task = await Task.findOne({ _id: taskId, boardId }).select('_id');
+        if (board && task) {
+          socket.to(board._id.toString()).emit('comment:added', { taskId, comment });
+        }
+      } catch (error) {
+        console.error('Socket comment:create error:', error.message);
+      }
     });
 
     socket.on('disconnect', () => {

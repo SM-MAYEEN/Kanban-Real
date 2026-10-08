@@ -61,6 +61,12 @@ export const sendInviteEmail = async ({ toEmail, boardTitle, inviteLink, inviter
   };
 
   const info = await transporter.sendMail(mailOptions);
+  const recipientAccepted = info.accepted.some(
+    (recipient) => String(recipient).toLowerCase() === toEmail.trim().toLowerCase(),
+  );
+  if (!recipientAccepted) {
+    throw new Error('Email provider did not accept the invitation recipient');
+  }
   console.log('✅ Email sent successfully! Message ID:', info.messageId);
   return info;
 };

@@ -1,11 +1,16 @@
 import { Sprint } from '../models/Sprint.js';
 import { Task } from '../models/Task.js';
 import { Column } from '../models/Column.js';
+import { findBoardForMember } from '../utils/boardAccess.js';
 
 // বোর্ডের সব স্প্রিন্ট ফেচ করা
 export const getBoardSprints = async (req, res) => {
   try {
     const { boardId } = req.params;
+    const board = await findBoardForMember(boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Board not found or you are not a member.' });
+    }
     const sprints = await Sprint.find({ boardId }).sort({ createdAt: -1 });
     res.json(sprints);
   } catch (error) {
@@ -17,6 +22,10 @@ export const getBoardSprints = async (req, res) => {
 export const createSprint = async (req, res) => {
   try {
     const { boardId, name, goal, startDate, endDate } = req.body;
+    const board = await findBoardForMember(boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Board not found or you are not a member.' });
+    }
     const sprint = await Sprint.create({
       boardId,
       name: name || `Sprint ${Date.now().toString().slice(-4)}`,
@@ -39,6 +48,10 @@ export const updateSprintStatus = async (req, res) => {
 
     const sprint = await Sprint.findById(id);
     if (!sprint) return res.status(404).json({ message: 'Sprint not found' });
+    const board = await findBoardForMember(sprint.boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Sprint not found or you are not a board member.' });
+    }
 
     sprint.status = status;
     await sprint.save();
@@ -55,6 +68,10 @@ export const getSprintAnalytics = async (req, res) => {
     const { id } = req.params;
     const sprint = await Sprint.findById(id);
     if (!sprint) return res.status(404).json({ message: 'Sprint not found' });
+    const board = await findBoardForMember(sprint.boardId, req.user._id);
+    if (!board) {
+      return res.status(404).json({ message: 'Sprint not found or you are not a board member.' });
+    }
 
     // স্প্রিন্টের সব টাস্ক
     const tasks = await Task.find({ sprintId: id }).populate('columnId');

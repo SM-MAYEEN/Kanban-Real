@@ -93,6 +93,7 @@ export default function Register() {
             <input
               type="email"
               required
+              readOnly={Boolean(inviteToken)}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl bg-slate-950/80 border border-white/10 px-4 py-3 text-sm text-white placeholder-slate-500 focus:border-amber-400 outline-none transition"

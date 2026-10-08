@@ -11,6 +11,7 @@ import SlackSidebar from '../components/SlackSidebar';
 import TaskDetailModal from '../components/TaskDetailModal';
 import { initSocket } from '../socket/socketClient';
 import { useBoardStore } from '../store/boardStore';
+import { useAuthStore } from '../store/authStore';
 import { useLangStore } from '../store/langStore';
 import { exportBoardToCSV } from '../utils/exportUtils';
 import { playSuccessSwoosh } from '../utils/soundEffects';
@@ -18,6 +19,8 @@ import { playSuccessSwoosh } from '../utils/soundEffects';
 const translations = {
   en: {
     syncing: "Synchronizing Workspace...",
+    boardUnavailable: "You do not have access to this board.",
+    moveFailed: "Could not move the task. Please try again.",
     searchPlaceholder: "🔍 Search issues...",
     boardTab: "Board",
     calendarTab: "📅 Calendar",
@@ -63,11 +66,24 @@ const translations = {
     inviteTitle: "Invite Teammate via Email",
     invitePlaceholder: "colleague@domain.com",
     sendInvite: "Send Invite",
+    teamLeader: "Team leader / Admin",
+    members: "Team members",
+    pendingInvites: "Pending invitations",
+    removeMember: "Remove",
+    cancelInvite: "Cancel invite",
+    copyInvite: "Copy invite link",
+    copied: "Copied",
+    copyFailed: "Could not copy the link. Select and copy it manually.",
+    confirmRemoveMember: "Remove this person from the team?",
+    confirmCancelInvite: "Cancel this invitation?",
+    noPendingInvites: "No pending invitations.",
     processing: "Processing...",
     errorText: "Error",
   },
   bn: {
     syncing: "ওয়ার্কস্পেস সিঙ্ক হচ্ছে...",
+    boardUnavailable: "এই বোর্ডে আপনার প্রবেশাধিকার নেই।",
+    moveFailed: "টাস্কটি সরানো যায়নি। আবার চেষ্টা করুন।",
     searchPlaceholder: "🔍 ইস্যু খুঁজুন...",
     boardTab: "বোর্ড",
     calendarTab: "📅 ক্যালেন্ডার",
@@ -113,6 +129,17 @@ const translations = {
     inviteTitle: "ইমেইলের মাধ্যমে সহকর্মীকে আমন্ত্রণ জানান",
     invitePlaceholder: "colleague@domain.com",
     sendInvite: "আমন্ত্রণ পাঠান",
+    teamLeader: "টিম লিডার / অ্যাডমিন",
+    members: "টিম সদস্য",
+    pendingInvites: "অপেক্ষমাণ আমন্ত্রণ",
+    removeMember: "সরান",
+    cancelInvite: "আমন্ত্রণ বাতিল",
+    copyInvite: "আমন্ত্রণ লিংক কপি",
+    copied: "কপি হয়েছে",
+    copyFailed: "লিংক কপি হয়নি। লিংকটি নির্বাচন করে কপি করুন।",
+    confirmRemoveMember: "এই সদস্যকে টিম থেকে সরাবেন?",
+    confirmCancelInvite: "এই আমন্ত্রণটি বাতিল করবেন?",
+    noPendingInvites: "কোনো অপেক্ষমাণ আমন্ত্রণ নেই।",
     processing: "প্রক্রিয়াকরণ হচ্ছে...",
     errorText: "সমস্যা হয়েছে",
   }
@@ -123,12 +150,14 @@ export default function BoardView() {
   const navigate = useNavigate();
   const { language } = useLangStore();
   const t = translations[language] || translations.en;
+  const user = useAuthStore((state) => state.user);
 
   const {
     board,
     columns,
     tasks,
     loading,
+    error,
     fetchBoardDetails,
     moveTask,
     addTask,
@@ -144,6 +173,7 @@ export default function BoardView() {
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [moveError, setMoveError] = useState('');
 
   // Views: 'kanban' | 'backlog' | 'calendar' | 'channel' | 'files'
   const [currentView, setCurrentView] = useState('kanban');
@@ -171,6 +201,13 @@ export default function BoardView() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [generatedInviteLink, setGeneratedInviteLink] = useState('');
   const [inviteFeedback, setInviteFeedback] = useState({ type: '', message: '' });
+  const [memberActionId, setMemberActionId] = useState('');
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
+  const boardOwnerId = board?.owner?._id || board?.owner;
+  const currentUserId = user?._id || user?.id;
+  const isBoardOwner = Boolean(
+    boardOwnerId && currentUserId && boardOwnerId.toString() === currentUserId.toString()
+  );
 
   const fetchSprints = async () => {
     try {
@@ -213,6 +250,11 @@ export default function BoardView() {
       socket.on('task:moved', handleTaskMovedRemote);
       socket.on('task:created', handleTaskCreatedRemote);
       socket.on('task:deleted', handleTaskDeletedRemote);
+      socket.on('board:access-revoked', ({ boardId: revokedBoardId }) => {
+        if (revokedBoardId?.toString() === boardId?.toString()) {
+          navigate('/dashboard');
+        }
+      });
     }
 
     return () => {
@@ -221,6 +263,7 @@ export default function BoardView() {
         socket.off('task:moved');
         socket.off('task:created');
         socket.off('task:deleted');
+        socket.off('board:access-revoked');
       }
     };
   }, [boardId]);
@@ -271,7 +314,7 @@ export default function BoardView() {
     });
   }, [tasks, searchQuery, selectedPriority]);
 
-  const onDragEnd = (result) => {
+  const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (
@@ -284,12 +327,17 @@ export default function BoardView() {
       playSuccessSwoosh();
     }
 
-    moveTask(
-      draggableId,
-      source.droppableId,
-      destination.droppableId,
-      destination.index
-    );
+    setMoveError('');
+    try {
+      await moveTask(
+        draggableId,
+        source.droppableId,
+        destination.droppableId,
+        destination.index
+      );
+    } catch (error) {
+      setMoveError(error.response?.data?.message || t.moveFailed);
+    }
   };
 
   const openCreateModal = (colId) => {
@@ -319,18 +367,57 @@ export default function BoardView() {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
     setInviteLoading(true);
+    setGeneratedInviteLink('');
+    setInviteLinkCopied(false);
     try {
       const res = await API.post(`/boards/${boardId}/members`, { email: inviteEmail.trim() });
-      setInviteFeedback({ type: 'success', message: res.data.message });
+      setInviteFeedback({ type: res.data.emailSent === false ? 'warning' : 'success', message: res.data.message });
       if (res.data.inviteLink) setGeneratedInviteLink(res.data.inviteLink);
       else {
-        fetchBoardDetails(boardId);
+        await fetchBoardDetails(boardId);
         setInviteEmail('');
       }
     } catch (err) {
       setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedInviteLink);
+      setInviteLinkCopied(true);
+    } catch {
+      setInviteFeedback({ type: 'error', message: t.copyFailed });
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!window.confirm(t.confirmRemoveMember)) return;
+    setMemberActionId(memberId);
+    try {
+      await API.delete(`/boards/${boardId}/members/${memberId}`);
+      await fetchBoardDetails(boardId);
+      setInviteFeedback({ type: 'success', message: t.removeMember });
+    } catch (err) {
+      setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
+    } finally {
+      setMemberActionId('');
+    }
+  };
+
+  const handleCancelInvite = async (email) => {
+    if (!window.confirm(t.confirmCancelInvite)) return;
+    setMemberActionId(email);
+    try {
+      await API.delete(`/boards/${boardId}/invites`, { data: { email } });
+      await fetchBoardDetails(boardId);
+      setInviteFeedback({ type: 'success', message: t.cancelInvite });
+    } catch (err) {
+      setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
+    } finally {
+      setMemberActionId('');
     }
   };
 
@@ -374,6 +461,22 @@ export default function BoardView() {
     );
   }
 
+  if (!board) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#07090e] text-slate-100">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-rose-300">{error || t.boardUnavailable}</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold"
+          >
+            {language === 'bn' ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to dashboard'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen w-screen bg-[#07090e] text-slate-100 flex overflow-hidden selection:bg-amber-500/30 selection:text-amber-200">
       <SlackSidebar
@@ -392,6 +495,7 @@ export default function BoardView() {
         isBoardView={true}
         onOpenBurndown={handleOpenAnalytics}
         onOpenInvite={() => setShowInviteModal(true)}
+        isBoardOwner={isBoardOwner}
         isMobileOpen={isMobileMenuOpen}
         setIsMobileOpen={setIsMobileMenuOpen}
       />
@@ -484,6 +588,13 @@ export default function BoardView() {
             </button>
           </div>
         </header>
+
+        {moveError && (
+          <div role="alert" className="mx-4 mt-3 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex justify-between gap-3">
+            <span>{moveError}</span>
+            <button onClick={() => setMoveError('')} aria-label="Dismiss" className="text-rose-200">✕</button>
+          </div>
+        )}
 
         {currentView === 'channel' ? (
           <ChannelChat
@@ -817,15 +928,89 @@ export default function BoardView() {
 
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl text-slate-100 relative">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl text-slate-100 relative">
             <button onClick={() => setShowInviteModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
             <h3 className="font-bold text-white text-base mb-2">{t.inviteTitle}</h3>
+            <p className="text-xs text-amber-300 mb-4">{t.teamLeader}: {board?.owner?.name || user?.name}</p>
             {inviteFeedback.message && (
-              <div className="mb-4 p-3 rounded-xl text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+              <div className={`mb-4 p-3 rounded-xl text-xs border ${
+                inviteFeedback.type === 'error'
+                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  : inviteFeedback.type === 'warning'
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              }`}>
                 {inviteFeedback.message}
               </div>
             )}
-            <form onSubmit={handleInvite} className="space-y-4">
+            {generatedInviteLink && (
+              <div className="mb-5 space-y-2">
+                <label className="block text-xs text-slate-300">{t.copyInvite}</label>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={generatedInviteLink}
+                    onFocus={(e) => e.target.select()}
+                    className="min-w-0 flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteLink}
+                    className="px-3 py-2 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs shrink-0"
+                  >
+                    {inviteLinkCopied ? t.copied : t.copyInvite}
+                  </button>
+                </div>
+              </div>
+            )}
+            <h4 className="text-xs font-bold text-white mb-2">
+              {t.members} ({board?.members?.length || 0})
+            </h4>
+            <div className="space-y-2 mb-5">
+              {(board?.members || []).map((member) => {
+                const memberId = member?._id || member;
+                const isLeader = memberId?.toString() === boardOwnerId?.toString();
+                return (
+                  <div key={memberId.toString()} className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/70 border border-white/5 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">{member?.name || member?.email || 'Team member'}</p>
+                      {member?.email && <p className="text-[10px] text-slate-400 truncate">{member.email}</p>}
+                    </div>
+                    {isLeader ? (
+                      <span className="text-[10px] text-amber-300 font-bold shrink-0">{t.teamLeader}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={memberActionId === memberId.toString()}
+                        onClick={() => handleRemoveMember(memberId.toString())}
+                        className="text-[10px] text-rose-300 hover:text-rose-200 disabled:opacity-50"
+                      >
+                        {t.removeMember}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <h4 className="text-xs font-bold text-white mb-2">{t.pendingInvites}</h4>
+            <div className="space-y-2 mb-5">
+              {(board?.pendingInvites || []).length === 0 ? (
+                <p className="text-[11px] text-slate-500">{t.noPendingInvites}</p>
+              ) : board.pendingInvites.map((invite) => (
+                <div key={invite.email} className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/70 border border-white/5 px-3 py-2">
+                  <span className="text-xs text-slate-300 truncate">{invite.email}</span>
+                  <button
+                    type="button"
+                    disabled={memberActionId === invite.email}
+                    onClick={() => handleCancelInvite(invite.email)}
+                    className="text-[10px] text-rose-300 hover:text-rose-200 disabled:opacity-50 shrink-0"
+                  >
+                    {t.cancelInvite}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={handleInvite} className="space-y-4 border-t border-white/10 pt-4">
               <input
                 type="email"
                 required

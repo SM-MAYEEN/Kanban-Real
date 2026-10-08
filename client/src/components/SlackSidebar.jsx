@@ -20,6 +20,9 @@ const translations = {
     yesSignOut: "Yes, Sign Out",
     channels: "Channels",
     viewProfile: "View Profile",
+    teamLeader: "Team leader / Admin",
+    teamMember: "member",
+    teamMembers: "members",
   },
   bn: {
     home: "হোম",
@@ -37,6 +40,9 @@ const translations = {
     yesSignOut: "হ্যাঁ, লগআউট",
     channels: "চ্যানেলসমূহ",
     viewProfile: "প্রোফাইল দেখুন",
+    teamLeader: "টিম লিডার / অ্যাডমিন",
+    teamMember: "জন সদস্য",
+    teamMembers: "জন সদস্য",
   }
 };
 
@@ -49,6 +55,7 @@ export default function SlackSidebar({
   boards = [],
   onOpenBurndown = () => {},
   onOpenInvite = () => {},
+  isBoardOwner = false,
   isBoardView = false,
   isMobileOpen = false,
   setIsMobileOpen = () => {},
@@ -270,7 +277,11 @@ export default function SlackSidebar({
                     <span className="text-amber-400">❖</span> {isBoardView ? board?.title || 'Workspace' : t.activeBoards}
                   </h3>
                   <span className="text-[10px] text-slate-400 block">
-                    {isBoardView ? 'Real-time Project' : 'Your Workspaces'}
+                    {isBoardView
+                      ? `${board?.members?.length || 0} ${
+                          board?.members?.length === 1 ? t.teamMember : t.teamMembers
+                        }${isBoardOwner ? ` · ${t.teamLeader}` : ''}`
+                      : 'Your Workspaces'}
                   </span>
                 </div>
                 <button
@@ -285,7 +296,15 @@ export default function SlackSidebar({
                 <div className="mb-5">
                   <div className="flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-amber-400/80 mb-1.5">
                     <span>{t.channels}</span>
-                    <button onClick={onOpenInvite} className="text-sm hover:text-white">+</button>
+                    {isBoardOwner && (
+                      <button
+                        onClick={onOpenInvite}
+                        title={t.teamLeader}
+                        className="text-sm hover:text-white"
+                      >
+                        +
+                      </button>
+                    )}
                   </div>
 
                   <div className="space-y-1">

@@ -20,7 +20,7 @@ const translations = {
     step1: "1. Create Workspaces: Launch independent boards tailored for each project or course sprint.",
     step2: "2. Real-Time Execution: Move cards between To Do, In Progress, and Done with sub-second team sync.",
     step3: "3. Issue Management: Utilize Jira-style issue keys (KAN-1), Story Points, and work hour tracking.",
-    step4: "4. Two-Man Deletion Rule: Boards are safe-deleted to trash history before permanent team approval.",
+    step4: "4. Team administration: The board creator is its team leader and controls invitations and board administration.",
     close: "Close",
   },
   bn: {
@@ -37,7 +37,7 @@ const translations = {
     step1: "১. ওয়ার্কস্পেস তৈরি: যেকোনো প্রজেক্ট বা কোর্সের স্প্রিন্টের জন্য স্বতন্ত্র বোর্ড চালু করুন।",
     step2: "২. রিয়েল-টাইম এক্সিকিউশন: কার্ডগুলোকে To Do, In Progress ও Done-এ টেনে আনলে সবার কাছে নিমেষেই সিঙ্ক হবে।",
     step3: "৩. ইস্যু ম্যানেজমেন্ট: জিরা স্টাইল ইস্যু কি (KAN-1), স্টোরি পয়েন্ট এবং কাজের ঘণ্টা ট্র্যাকিং ব্যবহার করুন।",
-    step4: "৪. ডিলিট নিরাপত্তা: বোর্ড ডিলিট করলে ট্র্যাশ হিস্টোরিতে সংরক্ষিত থাকে; টিমের অনুমতি ছাড়া চিরতরে মোছে না।",
+    step4: "৪. টিম পরিচালনা: বোর্ড তৈরিকারী টিম লিডার হিসেবে আমন্ত্রণ ও বোর্ড প্রশাসন নিয়ন্ত্রণ করেন।",
     close: "বন্ধ করুন",
   }
 };
@@ -198,13 +198,15 @@ export default function Dashboard() {
                         <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/30">
                           Kanban Board
                         </span>
-                        <button
-                          onClick={(e) => handleArchiveBoard(e, b._id)}
-                          className="text-slate-400 hover:text-rose-400 text-xs p-1 rounded-md hover:bg-rose-500/10 transition"
-                          title="Move to Trash"
-                        >
-                          🗑️
-                        </button>
+                        {String(b.owner?._id || b.owner) === String(user?._id || user?.id) && (
+                          <button
+                            onClick={(e) => handleArchiveBoard(e, b._id)}
+                            className="text-slate-400 hover:text-rose-400 text-xs p-1 rounded-md hover:bg-rose-500/10 transition"
+                            title="Move to Trash"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </div>
 
                       <h4 className="text-base sm:text-lg font-bold text-white group-hover:text-amber-400 transition mb-1.5 truncate">

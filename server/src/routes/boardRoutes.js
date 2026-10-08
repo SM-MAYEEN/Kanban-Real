@@ -8,6 +8,8 @@ import {
   restoreBoard,
   approvePermanentDelete,
   addMemberByEmail,
+  removeBoardMember,
+  cancelBoardInvite,
   acceptInviteToken,
 } from '../controllers/boardController.js';
 import { protect } from '../middlewares/authMiddleware.js';
@@ -21,6 +23,8 @@ router.get('/archived', getArchivedBoards);
 router.get('/:id', getBoardDetails);
 
 router.post('/:id/members', addMemberByEmail);
+router.delete('/:id/members/:memberId', removeBoardMember);
+router.delete('/:id/invites', cancelBoardInvite);
 router.post('/accept-invite', acceptInviteToken);
 
 router.put('/:id/archive', archiveBoard);

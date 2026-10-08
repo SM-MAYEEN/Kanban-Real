@@ -441,20 +441,26 @@ export default function Profile() {
                     <h4 className="font-bold text-xs text-white">{ab.title}</h4>
                     <span className="text-[10px] text-slate-400">Deleted: {new Date(ab.deletedAt).toLocaleDateString()}</span>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleRestore(ab._id)}
-                      className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs rounded-lg font-bold transition"
-                    >
-                      {isBn ? 'রিস্টোর' : 'Restore'}
-                    </button>
-                    <button
-                      onClick={() => handlePermanentDelete(ab._id)}
-                      className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs rounded-lg font-bold transition"
-                    >
-                      {isBn ? 'মুছে ফেলুন' : 'Wipe Forever'}
-                    </button>
-                  </div>
+                  {String(ab.owner?._id || ab.owner) === String(user?._id || user?.id) ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleRestore(ab._id)}
+                        className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs rounded-lg font-bold transition"
+                      >
+                        {isBn ? 'রিস্টোর' : 'Restore'}
+                      </button>
+                      <button
+                        onClick={() => handlePermanentDelete(ab._id)}
+                        className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs rounded-lg font-bold transition"
+                      >
+                        {isBn ? 'মুছে ফেলুন' : 'Wipe Forever'}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-500">
+                      {isBn ? 'শুধু টিম লিডার পরিচালনা করতে পারবেন' : 'Team leader only'}
+                    </span>
+                  )}
                 </div>
               ))
             )}

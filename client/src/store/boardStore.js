@@ -1,6 +1,43 @@
 import { create } from 'zustand';
 import API from '../api/axiosInstance';
 
+const getTaskColumnId = (task) =>
+  (task.columnId?._id || task.columnId || task.column?._id || task.column)?.toString();
+
+const orderTasksAfterMove = (tasks, taskId, destinationColumnId, newIndex) => {
+  const movedTask = tasks.find((task) => task._id?.toString() === taskId?.toString());
+  if (!movedTask) return tasks;
+
+  const sourceColumnId = getTaskColumnId(movedTask);
+  const destinationId = destinationColumnId?.toString();
+  const sortByOrder = (left, right) => (left.order || 0) - (right.order || 0);
+  const sourceTasks = tasks
+    .filter((task) =>
+      getTaskColumnId(task) === sourceColumnId
+      && task._id?.toString() !== taskId?.toString()
+    )
+    .sort(sortByOrder);
+  const destinationTasks = sourceColumnId === destinationId
+    ? sourceTasks
+    : tasks.filter((task) => getTaskColumnId(task) === destinationId).sort(sortByOrder);
+
+  const insertionIndex = Math.min(Math.max(0, newIndex), destinationTasks.length);
+  destinationTasks.splice(insertionIndex, 0, {
+    ...movedTask,
+    columnId: destinationId,
+    column: destinationId,
+  });
+
+  const affectedColumnIds = new Set([sourceColumnId, destinationId]);
+  const unchangedTasks = tasks.filter((task) => !affectedColumnIds.has(getTaskColumnId(task)));
+  const orderedTasks = sourceColumnId === destinationId ? destinationTasks : [...sourceTasks, ...destinationTasks];
+
+  return [
+    ...unchangedTasks,
+    ...orderedTasks.map((task, order) => ({ ...task, order })),
+  ];
+};
+
 export const useBoardStore = create((set, get) => ({
   board: null,
   columns: [],
@@ -51,7 +88,7 @@ export const useBoardStore = create((set, get) => ({
       });
     } catch (err) {
       console.error('Fetch Board Details Error:', err);
-      set({ error: err.message, loading: false });
+      set({ board: null, columns: [], tasks: [], error: err.response?.data?.message || err.message, loading: false });
     }
   },
 
@@ -82,20 +119,9 @@ export const useBoardStore = create((set, get) => ({
   },
 
   moveTask: async (taskId, sourceColId, destColId, newIndex) => {
-    const prevTasks = [...get().tasks];
-
+    const prevTasks = get().tasks;
     set((state) => ({
-      tasks: state.tasks.map((t) => {
-        if (t._id?.toString() === taskId?.toString()) {
-          return {
-            ...t,
-            columnId: destColId?.toString(),
-            column: destColId?.toString(),
-            order: newIndex,
-          };
-        }
-        return t;
-      }),
+      tasks: orderTasksAfterMove(state.tasks, taskId, destColId, newIndex),
     }));
 
     try {
@@ -106,6 +132,7 @@ export const useBoardStore = create((set, get) => ({
     } catch (err) {
       console.error('Move Task Error:', err);
       set({ tasks: prevTasks });
+      throw err;
     }
   },
 
@@ -134,13 +161,11 @@ export const useBoardStore = create((set, get) => ({
     });
   },
 
-  handleTaskMovedRemote: ({ taskId, columnId, order }) => {
+  handleTaskMovedRemote: ({ taskId, columnId, order, destinationColumnId, newOrder }) => {
+    const destinationId = destinationColumnId || columnId;
+    const destinationOrder = newOrder ?? order;
     set((state) => ({
-      tasks: state.tasks.map((t) =>
-        t._id?.toString() === taskId?.toString()
-          ? { ...t, columnId: columnId?.toString(), column: columnId?.toString(), order }
-          : t
-      ),
+      tasks: orderTasksAfterMove(state.tasks, taskId, destinationId, destinationOrder),
     }));
   },
 
