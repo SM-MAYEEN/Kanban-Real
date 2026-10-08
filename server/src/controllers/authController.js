@@ -8,7 +8,7 @@ const generateToken = (id) => {
 };
 
 // @route POST /api/auth/forgot-password
-// ইমেইল সার্ভিস ফেইল ছাড়াই সরাসরি ডাটাবেজ ভেরিফাইড পাসওয়ার্ড রিসেট
+// Direct password reset (No external email sending)
 export const forgotPassword = async (req, res) => {
   try {
     const { email, newPassword } = req.body;
@@ -17,9 +17,9 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Email and new password are required' });
     }
 
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
 
-    // কেস-ইনসেন্সিটিভ সার্চ
+    // Case-insensitive user khuje ber kora
     const user = await User.findOne({
       email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') },
     });
@@ -32,21 +32,22 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    // পাসওয়ার্ড সুরক্ষিতভাবে হ্যাশ করে সরাসরি আপডেট
+    // Direct bcrypt hash
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    // Mongoose pre-save bypass kore direct database update
     await User.findByIdAndUpdate(user._id, {
       $set: { password: hashedPassword },
     });
 
     return res.status(200).json({ 
       success: true,
-      message: 'Password reset successful! You can now log in.' 
+      message: 'Password updated successfully! Please login with your new password.' 
     });
   } catch (error) {
     console.error('Password reset error:', error);
-    return res.status(500).json({ message: 'Internal server error: ' + error.message });
+    return res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
 
@@ -89,7 +90,8 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    const userExists = await User.findOne({ email: email.toLowerCase().trim() });
+    const cleanEmail = email.trim().toLowerCase();
+    const userExists = await User.findOne({ email: cleanEmail });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -99,7 +101,7 @@ export const registerUser = async (req, res) => {
 
     const user = await User.create({
       name,
-      email: email.toLowerCase().trim(),
+      email: cleanEmail,
       password: hashedPassword,
     });
 
@@ -131,7 +133,8 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }

@@ -21,17 +21,18 @@ export default function ForgotPassword() {
     setStatus({ success: '', error: '' });
 
     const payload = {
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       newPassword,
     };
 
     try {
       let res;
-      // সরাসরি আমাদের কাস্টম ব্যাকএন্ডে রিসেট রিকোয়েস্ট পাঠানো
+      // Step 1: /api/auth/forgot-password call kora
       try {
         res = await API.post('/auth/forgot-password', payload);
       } catch (err1) {
         if (err1.response?.status === 404) {
+          // Step 2: Fallback hishebe /api/forgot-password call kora
           res = await API.post('/forgot-password', payload);
         } else {
           throw err1;
@@ -39,18 +40,19 @@ export default function ForgotPassword() {
       }
 
       setStatus({
-        success: res.data?.message || (language === 'bn' ? 'পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে! লগইন পেজে নিয়ে যাওয়া হচ্ছে...' : 'Password updated successfully! Redirecting...'),
+        success: res.data?.message || (language === 'bn' ? 'পাসওয়ার্ড সফলভাবে পরিবর্তন হয়েছে!' : 'Password reset successful! Redirecting to login...'),
         error: '',
       });
 
+      // 1.5 second por login page-e niye jabe
       setTimeout(() => {
         navigate('/login');
       }, 1500);
     } catch (err) {
-      console.error('Password reset failure:', err);
+      console.error('Password reset error:', err);
       const backendMessage = err.response?.data?.message || err.message;
       setStatus({
-        error: backendMessage || (language === 'bn' ? 'পাসওয়ার্ড পরিবর্তন করা যায়নি।' : 'Failed to reset password.'),
+        error: backendMessage || (language === 'bn' ? 'পাসওয়ার্ড পরিবর্তন করা যায়নি।' : 'Failed to update password.'),
         success: '',
       });
     } finally {
@@ -117,9 +119,9 @@ export default function ForgotPassword() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-xs tracking-wider shadow-lg shadow-amber-500/25 transition active:scale-98"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-xs tracking-wider shadow-lg shadow-amber-500/25 transition active:scale-98 disabled:opacity-50"
           >
-            {loading ? t.processing : t.resetPassBtn}
+            {loading ? (language === 'bn' ? 'আপডেট হচ্ছে...' : 'Updating...') : t.resetPassBtn}
           </button>
         </form>
 
