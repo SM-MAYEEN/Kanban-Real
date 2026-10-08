@@ -7,8 +7,7 @@ const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
-// @route POST /api/auth/forgot-password
-// Direct password reset (No external email sending)
+// @route POST /api/auth/forgot-password & /api/auth/reset-password
 export const forgotPassword = async (req, res) => {
   try {
     const { email, newPassword } = req.body;
@@ -19,7 +18,6 @@ export const forgotPassword = async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Case-insensitive user khuje ber kora
     const user = await User.findOne({
       email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') },
     });
@@ -32,24 +30,26 @@ export const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    // Direct bcrypt hash
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Mongoose pre-save bypass kore direct database update
     await User.findByIdAndUpdate(user._id, {
       $set: { password: hashedPassword },
     });
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       success: true,
-      message: 'Password updated successfully! Please login with your new password.' 
+      message: 'Password updated successfully! Please login with your new password.',
     });
   } catch (error) {
     console.error('Password reset error:', error);
     return res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
+
+// Import compatibility aliases (Render-এ ক্র্যাশ বন্ধের জন্য)
+export const resetPassword = forgotPassword;
+export const resetPasswordDirect = forgotPassword;
 
 // @route PUT /api/auth/change-password
 export const changePassword = async (req, res) => {

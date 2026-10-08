@@ -7,7 +7,6 @@ import {
   getTeammates,
   changePassword,
   forgotPassword,
-  resetPassword,
 } from '../controllers/authController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
@@ -16,8 +15,10 @@ const router = express.Router();
 // Public Routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+
+// Password Reset Routes (উভয় পাথ রাখা হয়েছে যাতে 404 না আসে)
 router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/reset-password', forgotPassword);
 
 // Protected Routes
 router.get('/me', protect, getMe);
