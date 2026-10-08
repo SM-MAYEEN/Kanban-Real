@@ -74,6 +74,7 @@ const translations = {
     copyInvite: "Copy invite link",
     copied: "Copied",
     copyFailed: "Could not copy the link. Select and copy it manually.",
+    invalidInviteEmail: "Enter a valid email address to send an invitation.",
     confirmRemoveMember: "Remove this person from the team?",
     confirmCancelInvite: "Cancel this invitation?",
     noPendingInvites: "No pending invitations.",
@@ -136,6 +137,7 @@ const translations = {
     copyInvite: "আমন্ত্রণ লিংক কপি",
     copied: "কপি হয়েছে",
     copyFailed: "লিংক কপি হয়নি। লিংকটি নির্বাচন করে কপি করুন।",
+    invalidInviteEmail: "আমন্ত্রণ পাঠাতে একটি সঠিক ইমেইল ঠিকানা লিখুন।",
     confirmRemoveMember: "এই সদস্যকে টিম থেকে সরাবেন?",
     confirmCancelInvite: "এই আমন্ত্রণটি বাতিল করবেন?",
     noPendingInvites: "কোনো অপেক্ষমাণ আমন্ত্রণ নেই।",
@@ -466,22 +468,15 @@ export default function BoardView() {
     }
   };
 
-  // if (loading) {
-  //   return (
-  //     <div className="flex h-screen items-center justify-center bg-[#07090e] text-amber-400 font-semibold text-sm animate-pulse">
-  //       {t.syncing}
-  //     </div>
-  //   );
-  // }
-
-  if (!board) {
+  // 1-second flicker fix: shudhu loading shesh hole ebong prokrrito error thaklei 'boardUnavailable' screen dekhabe
+  if (!board && !loading && error) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#07090e] text-slate-100">
         <div className="text-center space-y-3">
           <p className="text-sm text-rose-300">{error || t.boardUnavailable}</p>
           <button
             onClick={() => navigate('/dashboard')}
-            className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold"
+            className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-bold hover:bg-amber-300 transition"
           >
             {language === 'bn' ? 'ড্যাশবোর্ডে ফিরুন' : 'Back to dashboard'}
           </button>
@@ -1029,7 +1024,16 @@ export default function BoardView() {
                 required
                 placeholder={t.invitePlaceholder}
                 value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
+                onInvalid={(e) => {
+                  e.preventDefault();
+                  setInviteFeedback({ type: 'error', message: t.invalidInviteEmail });
+                }}
+                onChange={(e) => {
+                  setInviteEmail(e.target.value);
+                  setInviteFeedback((current) =>
+                    current.type === 'error' ? { type: '', message: '' } : current
+                  );
+                }}
                 className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-sm outline-none focus:border-amber-400"
               />
               <div className="flex justify-end gap-2">
