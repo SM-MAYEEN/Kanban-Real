@@ -1,4 +1,5 @@
 import { Task } from '../models/Task.js';
+import { Column } from '../models/Column.js';
 import { Activity } from '../models/Activity.js';
 import mongoose from 'mongoose';
 
@@ -17,8 +18,6 @@ export const createTask = async (req, res) => {
       issueType,
       storyPoints,
       estimatedHours,
-      blockedBy,
-      assignedTo,
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -29,21 +28,25 @@ export const createTask = async (req, res) => {
       return res.status(400).json({ message: 'Board ID and Column ID are required' });
     }
 
-    // ObjectId সেফটি ভ্যালিডেশন
-    const validBoardId = mongoose.isValidObjectId(boardId) ? new mongoose.Types.ObjectId(boardId) : null;
-    const validColumnId = mongoose.isValidObjectId(columnId) ? new mongoose.Types.ObjectId(columnId) : null;
+    // ভ্যালিড ObjectId নিশ্চিত করা
+    const bId = mongoose.isValidObjectId(boardId) ? new mongoose.Types.ObjectId(boardId) : null;
+    const cId = mongoose.isValidObjectId(columnId) ? new mongoose.Types.ObjectId(columnId) : null;
 
-    if (!validBoardId || !validColumnId) {
+    if (!bId || !cId) {
       return res.status(400).json({ message: 'Invalid Board ID or Column ID format' });
     }
 
-    const columnTaskCount = await Task.countDocuments({ columnId: validColumnId });
-    const boardTotalTasks = await Task.countDocuments({ boardId: validBoardId });
-    // ইউনিক কি নিশ্চিত করা
-    const taskKey = `KAN-${boardTotalTasks + 1}-${Math.floor(100 + Math.random() * 900)}`;
+    // অর্ডার এবং ইউনিক কি গণনা
+    const columnTaskCount = await Task.countDocuments({ 
+      $or: [{ columnId: cId }, { column: cId }] 
+    });
+    const boardTotalTasks = await Task.countDocuments({ 
+      $or: [{ boardId: bId }, { board: bId }] 
+    });
+    const taskKey = `KAN-${boardTotalTasks + 1}`;
 
-    // Subtasks স্যানিটাইজেশন
-    const cleanSubtasks = Array.isArray(subtasks)
+    // সাবটাস্ক প্রসেসিং
+    const formattedSubtasks = Array.isArray(subtasks)
       ? subtasks
           .map((st) => {
             if (typeof st === 'string' && st.trim()) return { title: st.trim(), completed: false };
@@ -53,8 +56,8 @@ export const createTask = async (req, res) => {
           .filter(Boolean)
       : [];
 
-    // টাস্ক পেলোড তৈরি (যেখানে কোনো ইনভ্যালিড ObjectId পাস হবে না)
-    const taskPayload = {
+    // পেলোড - উভয় ফিল্ড নাম দিয়ে দেওয়া হলো যাতে স্কিমায় যে নামেই থাকুক কাজ করে
+    const taskDoc = {
       key: taskKey,
       title: title.trim(),
       description: description ? String(description).trim() : '',
@@ -62,77 +65,82 @@ export const createTask = async (req, res) => {
       storyPoints: Number(storyPoints) || 1,
       estimatedHours: Number(estimatedHours) || 0,
       loggedHours: 0,
-      boardId: validBoardId,
-      columnId: validColumnId,
+      boardId: bId,
+      board: bId,
+      columnId: cId,
+      column: cId,
       priority: priority || 'Medium',
       tags: Array.isArray(tags) ? tags : [],
-      subtasks: cleanSubtasks,
+      subtasks: formattedSubtasks,
       order: columnTaskCount,
     };
 
-    // অপশনাল ফিল্ডগুলো কেবল ভ্যালিড হলেই পুশ করা হবে
     if (sprintId && mongoose.isValidObjectId(sprintId)) {
-      taskPayload.sprintId = new mongoose.Types.ObjectId(sprintId);
+      taskDoc.sprintId = new mongoose.Types.ObjectId(sprintId);
     }
     if (dueDate) {
-      taskPayload.dueDate = new Date(dueDate);
+      taskDoc.dueDate = new Date(dueDate);
     }
-    if (assignedTo && mongoose.isValidObjectId(assignedTo)) {
-      taskPayload.assignedTo = new mongoose.Types.ObjectId(assignedTo);
-    }
-    if (Array.isArray(blockedBy) && blockedBy.length > 0) {
-      taskPayload.blockedBy = blockedBy.filter((id) => mongoose.isValidObjectId(id)).map((id) => new mongoose.Types.ObjectId(id));
-    }
-
-    // অথেন্টিকেটেড ইউজার থাকলে যোগ করা
     if (req.user && (req.user._id || req.user.id)) {
       const uId = req.user._id || req.user.id;
-      taskPayload.creator = uId;
-      taskPayload.user = uId;
+      taskDoc.creator = uId;
+      taskDoc.user = uId;
     }
 
-    const task = await Task.create(taskPayload);
+    // ১. টাস্ক তৈরি
+    const newTask = await Task.create(taskDoc);
 
-    // Populate ট্রাই-ক্যাচ
+    // ২. কলামের সাথে টাস্ক লিঙ্ক করা (যদি কলাম স্কিমায় tasks অ্যারে থাকে)
+    try {
+      if (Column) {
+        await Column.findByIdAndUpdate(cId, {
+          $addToSet: { tasks: newTask._id }
+        });
+      }
+    } catch (colErr) {
+      console.warn('Column task update bypassed:', colErr.message);
+    }
+
+    // ৩. পপুলেট
     let populatedTask;
     try {
-      populatedTask = await Task.findById(task._id)
+      populatedTask = await Task.findById(newTask._id)
         .populate('assignedTo', 'name email avatar')
         .populate('blockedBy', 'key title');
     } catch {
-      populatedTask = task;
+      populatedTask = newTask;
     }
 
-    // এক্টিভিটি ট্রাই-ক্যাচ
+    // ৪. অ্যাক্টিভিটি হিস্ট্রি
     if (req.user && (req.user._id || req.user.id)) {
       try {
         await Activity.create({
-          boardId: validBoardId,
+          boardId: bId,
           user: req.user._id || req.user.id,
           action: 'CREATED_TASK',
-          details: `created [${taskKey}] "${task.title}"`,
+          details: `created [${taskKey}] "${newTask.title}"`,
         });
       } catch (actErr) {
-        console.warn('Activity write skipped:', actErr.message);
+        console.warn('Activity write bypassed:', actErr.message);
       }
     }
 
-    // সকেট ট্রাই-ক্যাচ
+    // ৫. সকেট এমিট
     try {
       const io = req.app.get('io');
       if (io) {
-        io.to(validBoardId.toString()).emit('task:created', populatedTask || task);
+        io.to(bId.toString()).emit('task:created', populatedTask || newTask);
       }
-    } catch (sErr) {
-      console.warn('Socket emit skipped:', sErr.message);
+    } catch (sockErr) {
+      console.warn('Socket emit bypassed:', sockErr.message);
     }
 
-    return res.status(201).json(populatedTask || task);
+    return res.status(201).json(populatedTask || newTask);
   } catch (error) {
-    console.error('SERVER TASK ERROR LOG:', error);
-    return res.status(500).json({
-      message: error.message || 'Server error creating task',
-      errorDetails: error.toString(),
+    console.error('CRITICAL TASK CONTROLLER 500 ERROR:', error);
+    return res.status(500).json({ 
+      message: error.message || 'Internal server error creating task',
+      details: error.name || 'Error'
     });
   }
 };
@@ -192,6 +200,16 @@ export const deleteTask = async (req, res) => {
 
     const task = await Task.findByIdAndDelete(id);
     if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    try {
+      if (Column && task.columnId) {
+        await Column.findByIdAndUpdate(task.columnId, {
+          $pull: { tasks: id }
+        });
+      }
+    } catch {
+      // pass
+    }
 
     try {
       const io = req.app.get('io');
