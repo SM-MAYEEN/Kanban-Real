@@ -57,13 +57,12 @@ const userSchema = new mongoose.Schema(
 );
 
 // পাসওয়ার্ড সেভ বা পরিবর্তন করার আগে হ্যাশ করা
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function () {
   if (!this.isModified('password')) {
-    return next ? next() : undefined;
+    return;
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
-  if (next) next();
 });
 
 // পাসওয়ার্ড মেলানোর মেথড

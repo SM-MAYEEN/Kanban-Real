@@ -71,8 +71,7 @@ export const changePassword = async (req, res) => {
       return res.status(400).json({ message: 'Current password does not match' });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    user.password = newPassword;
     await user.save();
 
     res.status(200).json({ message: 'Password updated successfully' });
@@ -96,13 +95,10 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
     const user = await User.create({
       name,
       email: cleanEmail,
-      password: hashedPassword,
+      password,
     });
 
     res.status(201).json({
