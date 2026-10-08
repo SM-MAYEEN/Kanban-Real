@@ -141,25 +141,27 @@ export const addMemberByEmail = async (req, res) => {
     await board.save();
 
     const inviteLink = `${clientUrl}/invite?inviteToken=${inviteToken}&boardId=${id}&email=${encodeURIComponent(targetEmail)}`;
-    let emailSent = false;
-    try {
-      await sendInviteEmail({
-        toEmail: targetEmail,
-        boardTitle: board.title,
-        inviteLink,
-        inviterName,
+    void sendInviteEmail({
+      toEmail: targetEmail,
+      boardTitle: board.title,
+      inviteLink,
+      inviterName,
+    })
+      .then(() => {
+        console.log(`Invitation email delivered to ${targetEmail}.`);
+      })
+      .catch((mailErr) => {
+        console.error(`Invitation email delivery failed for ${targetEmail}:`, mailErr.message);
       });
-      emailSent = true;
-    } catch (mailErr) {
-      console.warn('Auto invite email failed:', mailErr.message);
-    }
 
     res.json({
-      message: emailSent
-        ? `Invitation email sent to ${targetEmail}. They must accept it before joining the board.`
-        : `Email could not be sent. Share the invitation link with ${targetEmail}.`,
+      message: `Invitation created for ${targetEmail}. They must open the link and accept it before joining. Email delivery is being attempted; share the link if the email does not arrive.`,
       inviteLink,
-      emailSent,
+      emailSent: null,
+      pendingInvite: {
+        email: targetEmail,
+        invitedAt: board.pendingInvites.find((invite) => invite.email === targetEmail)?.invitedAt,
+      },
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

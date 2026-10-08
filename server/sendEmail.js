@@ -13,6 +13,9 @@ export const sendInviteEmail = async ({ toEmail, boardTitle, inviteLink, inviter
 
   const transporter = nodemailer.createTransport({
     service: 'gmail',
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user: process.env.EMAIL_USER.trim(),
       pass: process.env.EMAIL_PASS.trim(),
@@ -38,11 +41,14 @@ export const sendInviteEmail = async ({ toEmail, boardTitle, inviteLink, inviter
           <br/>
           <strong style="color: #ffffff; font-size: 16px;">"${boardTitle}"</strong>.
         </p>
+        <p style="font-size: 13px; line-height: 1.6; color: #cbd5e1;">
+          Open the invitation link and sign in with this email address. If you already have an account, use that account. You will join the board only after you select <strong style="color: #fbbf24;">Accept invitation</strong>.
+        </p>
 
         <div style="text-align: center; margin: 35px 0;">
           <a href="${inviteLink}" 
              style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #090d16; padding: 14px 28px; text-decoration: none; font-weight: bold; font-size: 14px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);">
-            Accept Invitation & Join Board
+            Review & Accept Invitation
           </a>
         </div>
 

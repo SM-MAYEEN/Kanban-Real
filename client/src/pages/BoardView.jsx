@@ -371,12 +371,27 @@ export default function BoardView() {
     setInviteLinkCopied(false);
     try {
       const res = await API.post(`/boards/${boardId}/members`, { email: inviteEmail.trim() });
-      setInviteFeedback({ type: res.data.emailSent === false ? 'warning' : 'success', message: res.data.message });
+      setInviteFeedback({
+        type: res.data.emailSent === false || res.data.emailSent === null ? 'warning' : 'success',
+        message: res.data.message,
+      });
       if (res.data.inviteLink) setGeneratedInviteLink(res.data.inviteLink);
-      else {
-        await fetchBoardDetails(boardId);
-        setInviteEmail('');
+      if (res.data.pendingInvite) {
+        useBoardStore.setState((state) => ({
+          board: state.board
+            ? {
+                ...state.board,
+                pendingInvites: [
+                  ...(state.board.pendingInvites || []).filter(
+                    (invite) => invite.email !== res.data.pendingInvite.email
+                  ),
+                  res.data.pendingInvite,
+                ],
+              }
+            : state.board,
+        }));
       }
+      setInviteEmail('');
     } catch (err) {
       setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
     } finally {

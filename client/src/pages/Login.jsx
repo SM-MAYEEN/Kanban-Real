@@ -9,7 +9,7 @@ export default function Login() {
   const { language, toggleLanguage } = useLangStore();
   const t = translations[language] || translations.en;
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(searchParams.get('email') || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, loading, error } = useAuthStore();
