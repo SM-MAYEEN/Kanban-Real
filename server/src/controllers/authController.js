@@ -2,93 +2,51 @@ import { User } from '../models/User.js';
 import { Board } from '../models/Board.js';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import crypto from 'node:crypto';
-import { sendPasswordResetEmail } from '../../sendEmail.js';
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
 // @route POST /api/auth/forgot-password
+// ইমেইল সার্ভিস ফেইল ছাড়াই সরাসরি ডাটাবেজ ভেরিফাইড পাসওয়ার্ড রিসেট
 export const forgotPassword = async (req, res) => {
   try {
-    const email = typeof req.body?.email === 'string'
-      ? req.body.email.trim().toLowerCase()
-      : '';
-    if (!email) {
-      return res.status(400).json({ message: 'Email is required' });
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Email and new password are required' });
     }
 
-    const user = await User.findOne({ email });
+    const cleanEmail = email.trim();
+
+    // কেস-ইনসেন্সিটিভ সার্চ
+    const user = await User.findOne({
+      email: { $regex: new RegExp(`^${cleanEmail}$`, 'i') },
+    });
+
     if (!user) {
-      return res.status(200).json({
-        message: 'If your email is registered, a reset link will be sent shortly. Check your inbox and spam folder.',
-      });
+      return res.status(404).json({ message: 'No registered user found with this email!' });
     }
 
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    user.passwordResetToken = crypto
-      .createHash('sha256')
-      .update(resetToken)
-      .digest('hex');
-    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
-    await user.save();
-
-    try {
-      if (!process.env.CLIENT_URL) {
-        throw new Error('CLIENT_URL is not configured');
-      }
-      await sendPasswordResetEmail({
-        toEmail: user.email,
-        resetLink: `${process.env.CLIENT_URL.replace(/\/+$/, '')}/forgot-password?token=${resetToken}`,
-      });
-    } catch (error) {
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save();
-      throw error;
-    }
-
-    return res.status(200).json({
-      message: 'If your email is registered, a reset link will be sent shortly. Check your inbox and spam folder.',
-    });
-  } catch (error) {
-    console.error('Forgot password error:', error);
-    return res.status(500).json({
-      message: 'Unable to send the password reset email. Please try again later.',
-    });
-  }
-};
-
-// @route POST /api/auth/reset-password
-export const resetPassword = async (req, res) => {
-  try {
-    const { token, newPassword } = req.body || {};
-    if (typeof token !== 'string' || typeof newPassword !== 'string' || !newPassword) {
-      return res.status(400).json({ message: 'Reset token and new password are required' });
-    }
     if (newPassword.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: new Date() },
+    // পাসওয়ার্ড সুরক্ষিতভাবে হ্যাশ করে সরাসরি আপডেট
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await User.findByIdAndUpdate(user._id, {
+      $set: { password: hashedPassword },
     });
-    if (!user) {
-      return res.status(400).json({ message: 'Reset link is invalid or has expired' });
-    }
 
-    user.password = newPassword;
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-    await user.save();
-
-    return res.status(200).json({ message: 'Password reset successfully. You can now sign in.' });
+    return res.status(200).json({ 
+      success: true,
+      message: 'Password reset successful! You can now log in.' 
+    });
   } catch (error) {
-    console.error('Reset password error:', error);
-    return res.status(500).json({ message: 'Unable to reset the password. Please try again.' });
+    console.error('Password reset error:', error);
+    return res.status(500).json({ message: 'Internal server error: ' + error.message });
   }
 };
 
