@@ -46,51 +46,40 @@ export const useBoardStore = create((set, get) => ({
   error: null,
 
   fetchBoardDetails: async (boardId) => {
+  // যদি আগে থেকেই বোর্ড লোড করা থাকে, তবে ফুল ব্লকিং লোডিং স্টেট চালু করার দরকার নেই
+  if (!get().board) {
     set({ loading: true, error: null });
-    try {
-      const res = await API.get(`/boards/${boardId}`);
-      
-      const resData = res.data || {};
-      const boardData = resData.board || (resData._id ? resData : null);
-      
-      // কলাম ও টাস্ক যেকোনো ফরমেটেই আসুক না কেন সেফলি এক্সট্র্যাক্ট করা
-      let columnsData = [];
-      if (Array.isArray(resData.columns)) {
-        columnsData = resData.columns;
-      } else if (boardData && Array.isArray(boardData.columns)) {
-        columnsData = boardData.columns;
-      }
+  }
+  try {
+    const res = await API.get(`/boards/${boardId}`);
+    const resData = res.data || {};
+    const boardData = resData.board || (resData._id ? resData : null);
 
-      let tasksData = [];
-      if (Array.isArray(resData.tasks)) {
-        tasksData = resData.tasks;
-      } else if (boardData && Array.isArray(boardData.tasks)) {
-        tasksData = boardData.tasks;
-      }
-
-      // যদি টাস্ক আলাদা এন্ডপয়েন্ট থেকে আসে, তাও ব্যাকআপ ফেচ
-      if (tasksData.length === 0) {
-        try {
-          const taskRes = await API.get(`/tasks/board/${boardId}`);
-          if (Array.isArray(taskRes.data)) {
-            tasksData = taskRes.data;
-          }
-        } catch {
-          // ইগনোর যদি আলাদা রাউট না থাকে
-        }
-      }
-
-      set({
-        board: boardData,
-        columns: columnsData,
-        tasks: tasksData,
-        loading: false,
-      });
-    } catch (err) {
-      console.error('Fetch Board Details Error:', err);
-      set({ board: null, columns: [], tasks: [], error: err.response?.data?.message || err.message, loading: false });
+    let columnsData = [];
+    if (Array.isArray(resData.columns)) {
+      columnsData = resData.columns;
+    } else if (boardData && Array.isArray(boardData.columns)) {
+      columnsData = boardData.columns;
     }
-  },
+
+    let tasksData = [];
+    if (Array.isArray(resData.tasks)) {
+      tasksData = resData.tasks;
+    } else if (boardData && Array.isArray(boardData.tasks)) {
+      tasksData = boardData.tasks;
+    }
+
+    set({
+      board: boardData,
+      columns: columnsData,
+      tasks: tasksData,
+      loading: false,
+    });
+  } catch (err) {
+    console.error('Fetch Board Details Error:', err);
+    set({ error: err.message, loading: false });
+  }
+},
 
   addTask: async (taskData) => {
     try {

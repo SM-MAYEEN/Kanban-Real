@@ -1,5 +1,5 @@
 import { DragDropContext } from '@hello-pangea/dnd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../api/axiosInstance';
 import ActivityDrawer from '../components/ActivityDrawer';
@@ -196,7 +196,7 @@ export default function BoardView() {
   // Invite Modal
   const [inviteEmail, setInviteEmail] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteLoading, setInviteLoading] = useState(false);
+  const inviteInFlightRef = useRef(false);
   const [generatedInviteLink, setGeneratedInviteLink] = useState('');
   const [inviteFeedback, setInviteFeedback] = useState({ type: '', message: '' });
   const [memberActionId, setMemberActionId] = useState('');
@@ -363,8 +363,8 @@ export default function BoardView() {
 
   const handleInvite = async (e) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
-    setInviteLoading(true);
+    if (!inviteEmail.trim() || inviteInFlightRef.current) return;
+    inviteInFlightRef.current = true;
     setGeneratedInviteLink('');
     setInviteLinkCopied(false);
     try {
@@ -393,7 +393,7 @@ export default function BoardView() {
     } catch (err) {
       setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
     } finally {
-      setInviteLoading(false);
+      inviteInFlightRef.current = false;
     }
   };
 
@@ -1035,7 +1035,6 @@ export default function BoardView() {
               <div className="flex justify-end gap-2">
                 <button
                   type="submit"
-                  disabled={inviteLoading}
                   className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 text-slate-950 font-bold text-xs"
                 >
                   {t.sendInvite}
