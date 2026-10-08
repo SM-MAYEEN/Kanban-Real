@@ -105,7 +105,7 @@ export const getBoardDetails = async (req, res) => {
   }
 };
 
-// যে কারও ইমেইলে ইনভাইট পাঠানো ও অটো ইমেইল সেন্ড করা
+// ইমেইলে ইনভাইট পাঠানো; গ্রহণ না করা পর্যন্ত সদস্য হিসেবে যোগ হয় না
 export const addMemberByEmail = async (req, res) => {
   try {
     const { id } = req.params;
@@ -125,55 +125,22 @@ export const addMemberByEmail = async (req, res) => {
     const clientUrl = process.env.CLIENT_URL || req.headers.origin || 'http://localhost:5173';
     const inviterName = req.user?.name || 'A teammate';
 
-    // ১. এক্সিস্টিং ইউজার হলে
-    const existingUser = await User.findOne({ email: targetEmail });
-    if (existingUser) {
-      const alreadyMember = board.members.some(
-        (mId) => mId.toString() === existingUser._id.toString()
-      );
-      if (alreadyMember) {
-        return res.status(400).json({ message: 'User is already a member of this board.' });
-      }
-
-      board.members.push(existingUser._id);
-      await board.save();
-
-      // অটো ইমেইল নোটিফিকেশন পাঠানো
-      const directBoardLink = `${clientUrl}/board/${id}`;
-      let emailSent = false;
-      try {
-        await sendInviteEmail({
-          toEmail: targetEmail,
-          boardTitle: board.title,
-          inviteLink: directBoardLink,
-          inviterName,
-        });
-        emailSent = true;
-      } catch (mailErr) {
-        console.warn('Direct invite email sending failed:', mailErr.message);
-      }
-
-      return res.json({
-        message: emailSent
-          ? `Added ${existingUser.name} to the team and sent an email to ${targetEmail}.`
-          : `Added ${existingUser.name} to the team, but the invitation email could not be sent.`,
-        inviteLink: null,
-        emailSent,
-      });
+    const existingUser = await User.findOne({ email: targetEmail }).select('_id name');
+    if (existingUser && board.members.some(
+      (memberId) => memberId.toString() === existingUser._id.toString()
+    )) {
+      return res.status(400).json({ message: 'User is already a member of this board.' });
     }
 
-    // ২. নতুন ইউজার হলে (যাদের অ্যাকাউন্ট এখনও নেই)
-    const inviteToken = crypto.randomBytes(20).toString('hex');
-    
-    board.pendingInvites = board.pendingInvites.filter((inv) => inv.email !== targetEmail);
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+    board.pendingInvites = board.pendingInvites.filter((invite) => invite.email !== targetEmail);
     board.pendingInvites.push({
       email: targetEmail,
       token: inviteToken,
     });
     await board.save();
 
-    const inviteLink = `${clientUrl}/register?inviteToken=${inviteToken}&boardId=${id}&email=${encodeURIComponent(targetEmail)}`;
-
+    const inviteLink = `${clientUrl}/invite?inviteToken=${inviteToken}&boardId=${id}&email=${encodeURIComponent(targetEmail)}`;
     let emailSent = false;
     try {
       await sendInviteEmail({
@@ -189,7 +156,7 @@ export const addMemberByEmail = async (req, res) => {
 
     res.json({
       message: emailSent
-        ? `Invitation email sent to ${targetEmail}.`
+        ? `Invitation email sent to ${targetEmail}. They must accept it before joining the board.`
         : `Email could not be sent. Share the invitation link with ${targetEmail}.`,
       inviteLink,
       emailSent,

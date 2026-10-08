@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useLangStore } from '../store/langStore';
 import { translations } from '../utils/translations';
 
 export default function Login() {
+  const [searchParams] = useSearchParams();
   const { language, toggleLanguage } = useLangStore();
   const t = translations[language] || translations.en;
 
@@ -18,7 +19,8 @@ export default function Login() {
     e.preventDefault();
     const success = await login(email, password);
     if (success) {
-      navigate('/dashboard');
+      const inviteQuery = new URLSearchParams(searchParams);
+      navigate(inviteQuery.has('inviteToken') ? `/invite?${inviteQuery}` : '/dashboard');
     }
   };
 
@@ -97,7 +99,10 @@ export default function Login() {
 
         <p className="mt-6 text-center text-xs text-slate-400">
           {t.noAccount}{' '}
-          <Link to="/register" className="font-bold text-amber-400 hover:text-amber-300">
+          <Link
+            to={searchParams.has('inviteToken') ? `/register?${searchParams}` : '/register'}
+            className="font-bold text-amber-400 hover:text-amber-300"
+          >
             {t.signUpLink}
           </Link>
         </p>

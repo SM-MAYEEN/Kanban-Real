@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import API from '../api/axiosInstance';
 
 export default function Register() {
   const [searchParams] = useSearchParams();
@@ -25,18 +24,9 @@ export default function Register() {
     e.preventDefault();
     const success = await register(name, email, password);
     if (success) {
-      // যদি ইনভাইট টোকেন থাকে, স্বয়ংক্রিয়ভাবে বোর্ডে যুক্ত হওয়া
       if (inviteToken && boardId) {
-        try {
-          await API.post('/boards/accept-invite', {
-            boardId,
-            inviteToken,
-          });
-          navigate(`/board/${boardId}`);
-          return;
-        } catch (err) {
-          console.error('Failed to auto-accept invite:', err);
-        }
+        navigate(`/invite?${searchParams.toString()}`);
+        return;
       }
       navigate('/dashboard');
     }
@@ -59,7 +49,7 @@ export default function Register() {
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
             {inviteToken
-              ? 'Complete registration to join the collaborative workspace'
+              ? 'Complete registration, then review and accept the invitation'
               : 'Create an account to build real-time agile workflows'}
           </p>
         </div>
@@ -120,13 +110,16 @@ export default function Register() {
             disabled={loading}
             className="w-full mt-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 py-3.5 font-bold text-slate-950 text-sm tracking-wide shadow-lg shadow-amber-500/25 transition active:scale-[0.99] disabled:opacity-50"
           >
-            {loading ? 'Setting up Workspace...' : inviteToken ? 'Accept & Join Board' : 'Create Account'}
+            {loading ? 'Setting up Workspace...' : inviteToken ? 'Create Account & Continue' : 'Create Account'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-xs text-slate-400">
           Already have an account?{' '}
-          <Link to="/login" className="text-amber-400 font-semibold hover:text-amber-300 underline">
+          <Link
+            to={inviteToken ? `/login?${searchParams.toString()}` : '/login'}
+            className="text-amber-400 font-semibold hover:text-amber-300 underline"
+          >
             Sign In
           </Link>
         </p>

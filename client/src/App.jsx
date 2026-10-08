@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import BoardView from './pages/BoardView';
 import Profile from './pages/Profile';
 import ForgotPassword from './pages/ForgotPassword';
+import InviteAcceptance from './pages/InviteAcceptance';
 
 
 function ProtectedRoute({ children }) {
@@ -19,6 +20,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/invite" element={<InviteAcceptance />} />
         <Route
           path="/dashboard"
           element={
