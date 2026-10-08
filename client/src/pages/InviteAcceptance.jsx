@@ -13,6 +13,7 @@ export default function InviteAcceptance() {
   const { language } = useLangStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
 
   const boardId = searchParams.get('boardId');
   const inviteToken = searchParams.get('inviteToken');
@@ -28,8 +29,12 @@ export default function InviteAcceptance() {
     setLoading(true);
     setError('');
     try {
-      await API.post('/boards/accept-invite', { boardId, inviteToken });
-      navigate(`/board/${boardId}`, { replace: true });
+      const response = await API.post('/boards/accept-invite', { boardId, inviteToken });
+      if (response.data.status === 'approved') {
+        navigate(`/board/${boardId}`, { replace: true });
+      } else {
+        setAwaitingApproval(true);
+      }
     } catch (err) {
       setError(err.response?.data?.message || (isBangla ? 'আমন্ত্রণ গ্রহণ করা যায়নি।' : 'Could not accept the invitation.'));
     } finally {
@@ -95,7 +100,9 @@ export default function InviteAcceptance() {
         {hasInvite && isAuthenticated && isInvitedUser && (
           <div className="space-y-3">
             <p className="text-center text-xs text-slate-300">
-              {isBangla ? 'আপনি আমন্ত্রণটি পরীক্ষা করেছেন। যোগ দিতে নিচের বাটনে চাপুন।' : 'Review the invitation, then accept to join the board.'}
+              {awaitingApproval
+                ? (isBangla ? 'আপনি আমন্ত্রণ গ্রহণ করেছেন। বোর্ডের অ্যাডমিন অনুমোদন দিলে তবেই যোগ দিতে পারবেন।' : 'You accepted the invitation. You can join after the team admin approves it.')
+                : (isBangla ? 'আমন্ত্রণটি পরীক্ষা করে গ্রহণ করুন। এরপর বোর্ডের অ্যাডমিনের অনুমোদন লাগবে।' : 'Review and accept the invitation. The team admin must approve it before you can join.')}
             </p>
             <button
               type="button"
@@ -104,8 +111,10 @@ export default function InviteAcceptance() {
               className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-amber-600 py-3 text-sm font-bold text-slate-950 disabled:opacity-50"
             >
               {loading
-                ? (isBangla ? 'গ্রহণ করা হচ্ছে…' : 'Accepting…')
-                : (isBangla ? 'আমন্ত্রণ গ্রহণ করুন' : 'Accept invitation')}
+                ? (isBangla ? 'যাচাই করা হচ্ছে…' : 'Checking…')
+                : (awaitingApproval
+                    ? (isBangla ? 'অনুমোদনের অবস্থা যাচাই করুন' : 'Check approval status')
+                    : (isBangla ? 'আমন্ত্রণ গ্রহণ করুন' : 'Accept invitation'))}
             </button>
           </div>
         )}

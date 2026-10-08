@@ -176,21 +176,67 @@ export const acceptInviteToken = async (req, res) => {
 
     const validInvite = board.pendingInvites.find((inv) => inv.token === inviteToken);
     if (!validInvite) {
+      const alreadyMember = board.members.some(
+        (memberId) => memberId.toString() === req.user._id.toString()
+      );
+      if (alreadyMember) {
+        return res.json({ message: 'Invitation already approved.', status: 'approved', boardId });
+      }
       return res.status(400).json({ message: 'Invalid or expired invitation token.' });
     }
     if (validInvite.email.toLowerCase() !== req.user.email.toLowerCase()) {
       return res.status(403).json({ message: 'This invitation was sent to a different email address.' });
     }
 
-    // মেম্বার হিসেবে যুক্ত করা
-    if (!board.members.some((memberId) => memberId.toString() === req.user._id.toString())) {
-      board.members.push(req.user._id);
+    if (!validInvite.acceptedAt) {
+      validInvite.acceptedAt = new Date();
+      await board.save();
     }
-    // পেন্ডিং থেকে সরানো
-    board.pendingInvites = board.pendingInvites.filter((inv) => inv.token !== inviteToken);
+
+    res.json({
+      message: 'Invitation accepted. Waiting for team leader approval.',
+      status: 'pending_admin_approval',
+      boardId,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const approveBoardInvite = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Please provide an email address.' });
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found.' });
+    if (!isBoardOwner(board, req.user._id)) {
+      return res.status(403).json({ message: 'Only the team leader can approve invitations.' });
+    }
+
+    const invite = board.pendingInvites.find(
+      (pendingInvite) => pendingInvite.email.toLowerCase() === email
+    );
+    if (!invite) return res.status(404).json({ message: 'Pending invitation not found.' });
+    if (!invite.acceptedAt) {
+      return res.status(409).json({ message: 'The invited person must accept before approval.' });
+    }
+
+    const invitedUser = await User.findOne({ email }).select('_id');
+    if (!invitedUser) {
+      return res.status(404).json({ message: 'The invited user account was not found.' });
+    }
+
+    if (!board.members.some((memberId) => memberId.toString() === invitedUser._id.toString())) {
+      board.members.push(invitedUser._id);
+    }
+    board.pendingInvites = board.pendingInvites.filter(
+      (pendingInvite) => pendingInvite.email.toLowerCase() !== email
+    );
     await board.save();
 
-    res.json({ message: 'Successfully joined board!', boardId });
+    res.json({ message: `${email} approved and added to the team.` });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

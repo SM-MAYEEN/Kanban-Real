@@ -11,6 +11,7 @@ import {
   removeBoardMember,
   cancelBoardInvite,
   acceptInviteToken,
+  approveBoardInvite,
 } from '../controllers/boardController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
@@ -25,6 +26,7 @@ router.get('/:id', getBoardDetails);
 router.post('/:id/members', addMemberByEmail);
 router.delete('/:id/members/:memberId', removeBoardMember);
 router.delete('/:id/invites', cancelBoardInvite);
+router.post('/:id/invites/approve', approveBoardInvite);
 router.post('/accept-invite', acceptInviteToken);
 
 router.put('/:id/archive', archiveBoard);

@@ -69,6 +69,11 @@ const translations = {
     teamLeader: "Team leader / Admin",
     members: "Team members",
     pendingInvites: "Pending invitations",
+    awaitingInvitee: "Waiting for invitee to accept",
+    awaitingAdmin: "Accepted — waiting for your approval",
+    approveInvite: "Approve",
+    inviteApproved: "Invitation approved",
+    refreshInvites: "Refresh",
     removeMember: "Remove",
     cancelInvite: "Cancel invite",
     copyInvite: "Copy invite link",
@@ -132,6 +137,11 @@ const translations = {
     teamLeader: "টিম লিডার / অ্যাডমিন",
     members: "টিম সদস্য",
     pendingInvites: "অপেক্ষমাণ আমন্ত্রণ",
+    awaitingInvitee: "আমন্ত্রিত ব্যক্তির গ্রহণের অপেক্ষায়",
+    awaitingAdmin: "গ্রহণ করা হয়েছে — আপনার অনুমোদনের অপেক্ষায়",
+    approveInvite: "অনুমোদন করুন",
+    inviteApproved: "আমন্ত্রণ অনুমোদিত",
+    refreshInvites: "রিফ্রেশ",
     removeMember: "সরান",
     cancelInvite: "আমন্ত্রণ বাতিল",
     copyInvite: "আমন্ত্রণ লিংক কপি",
@@ -429,6 +439,30 @@ export default function BoardView() {
       await API.delete(`/boards/${boardId}/invites`, { data: { email } });
       await fetchBoardDetails(boardId);
       setInviteFeedback({ type: 'success', message: t.cancelInvite });
+    } catch (err) {
+      setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
+    } finally {
+      setMemberActionId('');
+    }
+  };
+
+  const handleApproveInvite = async (email) => {
+    setMemberActionId(email);
+    try {
+      const res = await API.post(`/boards/${boardId}/invites/approve`, { email });
+      await fetchBoardDetails(boardId);
+      setInviteFeedback({ type: 'success', message: res.data.message || t.inviteApproved });
+    } catch (err) {
+      setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
+    } finally {
+      setMemberActionId('');
+    }
+  };
+
+  const handleRefreshInvites = async () => {
+    setMemberActionId('refresh');
+    try {
+      await fetchBoardDetails(boardId);
     } catch (err) {
       setInviteFeedback({ type: 'error', message: err.response?.data?.message || t.errorText });
     } finally {
@@ -1000,21 +1034,48 @@ export default function BoardView() {
                 );
               })}
             </div>
-            <h4 className="text-xs font-bold text-white mb-2">{t.pendingInvites}</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-bold text-white">{t.pendingInvites}</h4>
+              <button
+                type="button"
+                disabled={memberActionId === 'refresh'}
+                onClick={handleRefreshInvites}
+                className="text-[10px] text-amber-300 hover:text-amber-200 disabled:opacity-50"
+              >
+                {t.refreshInvites}
+              </button>
+            </div>
             <div className="space-y-2 mb-5">
               {(board?.pendingInvites || []).length === 0 ? (
                 <p className="text-[11px] text-slate-500">{t.noPendingInvites}</p>
               ) : board.pendingInvites.map((invite) => (
                 <div key={invite.email} className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/70 border border-white/5 px-3 py-2">
-                  <span className="text-xs text-slate-300 truncate">{invite.email}</span>
-                  <button
-                    type="button"
-                    disabled={memberActionId === invite.email}
-                    onClick={() => handleCancelInvite(invite.email)}
-                    className="text-[10px] text-rose-300 hover:text-rose-200 disabled:opacity-50 shrink-0"
-                  >
-                    {t.cancelInvite}
-                  </button>
+                  <div className="min-w-0">
+                    <span className="block text-xs text-slate-300 truncate">{invite.email}</span>
+                    <span className="block text-[10px] text-slate-500">
+                      {invite.acceptedAt ? t.awaitingAdmin : t.awaitingInvitee}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {invite.acceptedAt && (
+                      <button
+                        type="button"
+                        disabled={memberActionId === invite.email}
+                        onClick={() => handleApproveInvite(invite.email)}
+                        className="text-[10px] text-emerald-300 hover:text-emerald-200 disabled:opacity-50"
+                      >
+                        {t.approveInvite}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={memberActionId === invite.email}
+                      onClick={() => handleCancelInvite(invite.email)}
+                      className="text-[10px] text-rose-300 hover:text-rose-200 disabled:opacity-50"
+                    >
+                      {t.cancelInvite}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -22,12 +22,13 @@ const boardSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
-    // যাদের অ্যাকাউন্ট নেই কিন্তু ইনভাইট পাঠানো হয়েছে
+    // আমন্ত্রণ গ্রহণ বা টিম লিডারের অনুমোদনের অপেক্ষায় থাকা সদস্যরা
     pendingInvites: [
       {
         email: { type: String, required: true },
         token: { type: String, required: true },
         invitedAt: { type: Date, default: Date.now },
+        acceptedAt: { type: Date, default: null },
       },
     ],
     isArchived: {
