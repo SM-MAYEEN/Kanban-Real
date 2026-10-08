@@ -36,14 +36,10 @@ export const createTask = async (req, res) => {
       return res.status(400).json({ message: 'Invalid Board ID or Column ID format' });
     }
 
-    // অর্ডার এবং ইউনিক কি গণনা
+    // কলামের টাস্ক অর্ডার
     const columnTaskCount = await Task.countDocuments({ 
       $or: [{ columnId: cId }, { column: cId }] 
     });
-    const boardTotalTasks = await Task.countDocuments({ 
-      $or: [{ boardId: bId }, { board: bId }] 
-    });
-    const taskKey = `KAN-${boardTotalTasks + 1}`;
 
     // সাবটাস্ক প্রসেসিং
     const formattedSubtasks = Array.isArray(subtasks)
@@ -58,7 +54,6 @@ export const createTask = async (req, res) => {
 
     // পেলোড - উভয় ফিল্ড নাম দিয়ে দেওয়া হলো যাতে স্কিমায় যে নামেই থাকুক কাজ করে
     const taskDoc = {
-      key: taskKey,
       title: title.trim(),
       description: description ? String(description).trim() : '',
       issueType: issueType || 'Task',
@@ -87,8 +82,32 @@ export const createTask = async (req, res) => {
       taskDoc.user = uId;
     }
 
-    // ১. টাস্ক তৈরি
-    const newTask = await Task.create(taskDoc);
+    // Task.key is unique across the collection, so choose an unused key globally.
+    const getNextTaskKey = async () => {
+      const existingKeys = await Task.distinct('key', { key: /^KAN-\d+$/ });
+      const nextNumber = existingKeys.reduce((max, key) => {
+        const match = /^KAN-(\d+)$/.exec(key);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0) + 1;
+      return `KAN-${nextNumber}`;
+    };
+
+    // Retry if another request claims the same key after the lookup.
+    let newTask;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      taskDoc.key = await getNextTaskKey();
+      try {
+        newTask = await Task.create(taskDoc);
+        break;
+      } catch (error) {
+        const isKeyCollision = error.code === 11000
+          && (error.keyPattern?.key || error.keyValue?.key);
+        if (!isKeyCollision || attempt === 4) {
+          throw error;
+        }
+      }
+    }
+    const taskKey = newTask.key;
 
     // ২. কলামের সাথে টাস্ক লিঙ্ক করা (যদি কলাম স্কিমায় tasks অ্যারে থাকে)
     try {
