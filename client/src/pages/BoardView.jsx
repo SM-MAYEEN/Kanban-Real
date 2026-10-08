@@ -692,8 +692,12 @@ export default function BoardView() {
               <div className="flex gap-6 h-full items-start">
                 {columns.map((column) => {
                   const columnTasks = filteredTasks
-                    .filter((t) => t.columnId === column._id)
-                    .sort((a, b) => a.order - b.order);
+  .filter((t) => {
+    // columnId স্ট্রিং, অবজেক্ট কিংবা column যে নামেই থাকুক না কেন সঠিকভাবে ম্যাচ করবে
+    const taskColId = (t.columnId?._id || t.columnId || t.column?._id || t.column)?.toString();
+    return taskColId === column._id?.toString();
+  })
+  .sort((a, b) => (a.order || 0) - (b.order || 0));
 
                   return (
                     <Column

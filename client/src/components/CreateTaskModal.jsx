@@ -13,7 +13,7 @@ export default function CreateTaskModal({
 }) {
   const { language } = useLangStore();
   const t = translations[language] || translations.en;
-  const { columns, addTask } = useBoardStore();
+  const { columns, addTask, fetchBoardDetails } = useBoardStore();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -26,7 +26,7 @@ export default function CreateTaskModal({
 
   if (!isOpen) return null;
 
-  // AI Subtasks Handle
+  // AI Subtasks হ্যান্ডেল
   const handleAddAiSubtasks = (aiGeneratedList) => {
     const formatted = aiGeneratedList.map((item) => ({
       title: typeof item === 'string' ? item : item.title,
@@ -35,7 +35,7 @@ export default function CreateTaskModal({
     setSubtasks((prev) => [...prev, ...formatted]);
   };
 
-  // Manual Subtask Add
+  // ম্যানুয়াল সাবটাস্ক যোগ
   const handleAddManualSubtask = (e) => {
     e.preventDefault();
     if (!newSubtaskInput.trim()) return;
@@ -46,12 +46,12 @@ export default function CreateTaskModal({
     setNewSubtaskInput('');
   };
 
-  // Remove Subtask
+  // সাবটাস্ক মুছে ফেলা
   const handleRemoveSubtask = (indexToRemove) => {
     setSubtasks((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  // Submit Handler
+  // ফর্ম সাবমিট
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -61,7 +61,7 @@ export default function CreateTaskModal({
       return;
     }
 
-    // Default column guarantee: columnId na pele prothom column-e boshabe
+    // টার্গেট কলাম নিশ্চিত করা
     const resolvedColumnId = columnId || (columns && columns.length > 0 ? columns[0]._id : null);
 
     if (!resolvedColumnId) {
@@ -75,17 +75,19 @@ export default function CreateTaskModal({
 
     setSubmitting(true);
 
+    // ব্যাকএন্ডের সব ধরনের স্কিমা সাপোর্ট করার জন্য উভয় ফিল্ড পাঠানো হলো
     const taskPayload = {
       title: title.trim(),
       description: description.trim(),
       priority,
       storyPoints: Number(storyPoints) || 1,
       columnId: resolvedColumnId,
-      boardId,
-      // Backend safe subtasks format
-      subtasks: subtasks.map(st => ({
-        title: st.title,
-        completed: Boolean(st.completed)
+      column: resolvedColumnId,
+      boardId: boardId,
+      board: boardId,
+      subtasks: subtasks.map((st) => ({
+        title: typeof st === 'string' ? st : st.title,
+        completed: Boolean(st.completed),
       })),
     };
 
@@ -96,7 +98,12 @@ export default function CreateTaskModal({
         await addTask(taskPayload);
       }
 
-      // Reset Form & Close
+      // বোর্ড ইনস্ট্যান্ট রি-ফেচ করে নতুন টাস্ক নিশ্চিতভাবে বোর্ডে দৃশ্যমান করা
+      if (fetchBoardDetails && boardId) {
+        await fetchBoardDetails(boardId);
+      }
+
+      // ফর্ম রিসেট ও বন্ধ
       setTitle('');
       setDescription('');
       setPriority('Medium');
@@ -139,7 +146,7 @@ export default function CreateTaskModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Task Title */}
+          {/* টাস্ক টাইটেল */}
           <div>
             <label className="text-xs font-bold text-slate-300 block mb-1">
               {t.taskNameLabel}
@@ -154,7 +161,7 @@ export default function CreateTaskModal({
             />
           </div>
 
-          {/* Description */}
+          {/* ডেসক্রিপশন */}
           <div>
             <label className="text-xs font-bold text-slate-300 block mb-1">
               {t.descLabel}
@@ -168,7 +175,7 @@ export default function CreateTaskModal({
             />
           </div>
 
-          {/* Priority & Story Points */}
+          {/* প্রায়োরিটি ও স্টোরি পয়েন্ট */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-300 block mb-1">
@@ -200,7 +207,7 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          {/* Subtasks Section */}
+          {/* সাবটাস্ক সেকশন */}
           <div className="pt-2 border-t border-amber-500/20">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -260,7 +267,7 @@ export default function CreateTaskModal({
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {/* একশন বাটন */}
           <div className="flex justify-end gap-2.5 pt-3 border-t border-amber-500/20">
             <button
               type="button"
